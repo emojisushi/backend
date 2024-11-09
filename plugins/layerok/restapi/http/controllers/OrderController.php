@@ -6,6 +6,7 @@ use Composer\Semver\Comparator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Validator;
 use Layerok\Basecode\Classes\Receipt;
 use Layerok\PosterPos\Classes\ServiceMode;
@@ -30,7 +31,6 @@ use Maksa988\WayForPay\Domain\Client;
 
 class OrderController extends Controller
 {
-    const STICKS_POSTER_ID = 492;
     const DEFAULT_POSTER_ACCOUNT_NAME = 'emoji-bar2';
 
     public function place(): JsonResponse
@@ -101,18 +101,18 @@ class OrderController extends Controller
 
         if (intval($data['sticks']) > 0) {
             $posterSticks = $posterProducts->first(function($posterProduct) {
-                return $posterProduct['product_id'] === self::STICKS_POSTER_ID;
+                return $posterProduct['product_id'] === $this->getSticksPosterId();
             });
 
             if($posterSticks) {
                 $posterProducts = $posterProducts->filter(function($posterProduct)  {
-                    return $posterProduct['product_id'] !== self::STICKS_POSTER_ID;
+                    return $posterProduct['product_id'] !== $this->getSticksPosterId();
                 });
             }
 
             $posterProducts->add([
                 'name' => 'Палички для суші',
-                'product_id' => self::STICKS_POSTER_ID,
+                'product_id' => $this->getSticksPosterId(),
                 // merge sticks count from checkout form and from the cart
                 'count' => $data['sticks'] + ($posterSticks['count'] ?? 0)
             ]);
@@ -396,5 +396,9 @@ class OrderController extends Controller
 
     public function isDebugOn() {
         return !!request()->header('x-debug-mode');
+    }
+
+    public function getSticksPosterId() {
+        return Config::get('layerok.restapi::order.sushi_sticks_poster_id');
     }
 }
