@@ -222,6 +222,7 @@ class OrderController extends Controller
 
         $poster_order_id = $posterResult->response->incoming_order_id + $add_to_poster_id;
 
+        // todo: wrap in try catch
         $telegramRes = $api->sendMessage([
             'text' => $this->generateReceipt(
                 trans('layerok.restapi::lang.receipt.new_order') . ' #' . $poster_order_id,
