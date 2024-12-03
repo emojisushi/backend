@@ -136,15 +136,7 @@ class ProductController extends Controller
 
     protected function getSortOrder(): SortOrder
     {
-        // todo: I don't like this code because
-        // 1. Slug of root category may change, and it will no longer work
-        // 2. Products are sorted by category only in Root category, but another categories can
-        // have nested categories too
-        $defaultKey = $this->category->slug === RootCategory::SLUG_KEY ?
-            SortOrder::options()['category']->key() :
-            SortOrder::default();
-
-        $key = input('sort', $defaultKey);
+        $key = input('sort', 'latest');
 
         return SortOrder::fromKey($key);
     }
