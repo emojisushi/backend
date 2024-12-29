@@ -7,6 +7,7 @@ use DB;
 use Illuminate\Support\Collection;
 use Layerok\PosterPos\Models\City;
 use Layerok\Restapi\Classes\FuzzySearch;
+use Layerok\Restapi\Services\AppService;
 use October\Rain\Database\Schema\Blueprint;
 use October\Rain\Support\Facades\Schema;
 use OFFLINE\Mall\Classes\CategoryFilter\Filter;
@@ -172,23 +173,6 @@ class MySQL implements Index
         return new IndexResult($slice, count($items));
     }
 
-    public function getCurrentCitySlug(): string|null {
-        if($refererParts = explode('//', request()->header('referer'))) {
-            if(count($refererParts) > 1) {
-                return explode('.', $refererParts[1])[0];
-            }
-            return null;
-        }
-        return null;
-    }
-
-    public function getCurrentCity(): null|City {
-        if($city_slug = $this->getCurrentCitySlug()) {
-            return City::where('slug', $city_slug)->first();
-        }
-        return null;
-    }
-
     protected function search(string $index, Collection $filters, SortOrder $order, $params)
     {
         $idCol      = $index === 'products' ? 'product_id' : 'variant_id';
@@ -200,8 +184,10 @@ class MySQL implements Index
             'is_ghost',
             'name'
         ]);
+        // todo: inject it via container
+        $appService = new AppService();
 
-        if($city = $this->getCurrentCity()) {
+        if($city = $appService->getCurrentCity()) {
             $ids = $city->hidden_categories()->pluck('category_id')->toArray();
             $db->orWhere(function($query) use($ids) {
                 foreach($ids as $id) {
