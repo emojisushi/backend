@@ -15,7 +15,10 @@ class CategoryController extends Controller
     // todo: reduce duplication, the same method exists in MySQL class
     public function getCurrentCitySlug(): string|null {
         if($refererParts = explode('//', request()->header('referer'))) {
-            return explode('.', $refererParts[1])[0];
+            if(count($refererParts) > 1) {
+                return explode('.', $refererParts[1])[0];
+            }
+            return null;
         }
         return null;
     }
