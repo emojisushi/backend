@@ -3,6 +3,7 @@ namespace Layerok\PosterPos\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Hash;
 use Layerok\PosterPos\Classes\RootCategory;
 use Layerok\PosterPos\Models\City;
 use Layerok\PosterPos\Models\District;
@@ -80,6 +81,7 @@ class ImportData extends Command {
         PropertyValue::truncate();
         Category::truncate();
         HideCategory::truncate();
+        City::truncate();
 
         DB::table('offline_mall_prices')->truncate();
 
@@ -111,11 +113,16 @@ class ImportData extends Command {
 
         $odesaCity = new City([
             'name' => 'Odessa',
+            'slug' => 'odesa'
+        ]);
+        $odesaCity->save();
+
+        $chornomorskCity = new City([
+            'name' => 'Chornomorsk',
+            'slug' => 'chorno'
         ]);
 
-//        $chornomorskCity = new City([
-//            'name' => 'Chornomorsk'
-//        ]);
+        $chornomorskCity->save();
 
 //        Bot::create([
 //            'token' => '2',
