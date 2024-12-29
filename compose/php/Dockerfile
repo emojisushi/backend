@@ -23,11 +23,15 @@ RUN apk add --no-cache \
     freetype-dev \
     libpng-dev \
     libjpeg-turbo-dev \
-    linux-headers
+    linux-headers \
+    gmp-dev
 
 RUN docker-php-ext-configure gd \
     --with-freetype \
     --with-jpeg
+
+RUN docker-php-ext-configure gmp
+RUN docker-php-ext-install gmp
 
 RUN NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1) && \
     docker-php-ext-install -j${NPROC} gd
