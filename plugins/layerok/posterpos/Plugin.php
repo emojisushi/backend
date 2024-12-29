@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Event;
 use Layerok\PosterPos\Classes\Customer\AuthManager;
 use Layerok\PosterPos\Console\ImportData;
 use Layerok\PosterPos\Models\Cart;
+use Layerok\PosterPos\Models\City;
 use Layerok\PosterPos\Models\PosterAccount;
 use Layerok\PosterPos\Models\Spot;
 use Layerok\PosterPos\Models\Wishlist;
@@ -295,7 +296,13 @@ class Plugin extends PluginBase
                         'span' => 'left',
                         'type' => 'switch'
                     ]
-                ], Backend\Classes\FormTabs::SECTION_PRIMARY);
+                ]);
+                $widget->addFields([
+                    'hidden_categories_in_city' => [
+                        'label' => 'Hide category in city',
+                        'type' => 'relation'
+                    ]
+                ]);
             }
 
             if ($widget->model instanceof ShippingMethod) {
@@ -357,6 +364,13 @@ class Plugin extends PluginBase
                 'table'    => 'layerok_posterpos_hide_categories_in_spot',
                 'key'      => 'category_id',
                 'otherKey' => 'spot_id',
+            ];
+
+            $model->belongsToMany['hidden_categories_in_city'] = [
+                City::class,
+                'table'    => 'layerok_posterpos_hidden_categories_in_city',
+                'key'      => 'category_id',
+                'otherKey' => 'city_id',
             ];
 
             $model->morphToMany['poster_accounts'] = $this->posterAccountModelRelation();

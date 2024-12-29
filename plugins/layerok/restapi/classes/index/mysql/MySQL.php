@@ -5,6 +5,7 @@ namespace Layerok\Restapi\Classes\Index\MySQL;
 use Cache;
 use DB;
 use Illuminate\Support\Collection;
+use Layerok\PosterPos\Models\City;
 use Layerok\Restapi\Classes\FuzzySearch;
 use October\Rain\Database\Schema\Blueprint;
 use October\Rain\Support\Facades\Schema;
@@ -171,6 +172,20 @@ class MySQL implements Index
         return new IndexResult($slice, count($items));
     }
 
+    public function getCurrentCitySlug(): string|null {
+        if($refererParts = explode('//', request()->header('referer'))) {
+            return explode('.', $refererParts[1])[0];
+        }
+        return null;
+    }
+
+    public function getCurrentCity(): null|City {
+        if($city_slug = $this->getCurrentCitySlug()) {
+            return City::where('slug', $city_slug)->first();
+        }
+        return null;
+    }
+
     protected function search(string $index, Collection $filters, SortOrder $order, $params)
     {
         $idCol      = $index === 'products' ? 'product_id' : 'variant_id';
@@ -183,15 +198,14 @@ class MySQL implements Index
             'name'
         ]);
 
-        // todo: disable product category via admin panel
-        if($refererParts = explode('//', request()->header('referer'))) {
-            if(count($refererParts) > 1) {
-                if (explode('.', $refererParts[1])[0] === 'chorno') {
-                    $db->orWhereRaw('NOT JSON_CONTAINS(category_id, ?)', json_encode([2]));
+        if($city = $this->getCurrentCity()) {
+            $ids = $city->hidden_categories()->pluck('category_id')->toArray();
+            $db->orWhere(function($query) use($ids) {
+                foreach($ids as $id) {
+                    $query->whereRaw('NOT JSON_CONTAINS(category_id, ?)', json_encode([$id]));
                 }
-            }
+            });
         }
-
 
         $db->where('index', $index)->where('published', true);
 

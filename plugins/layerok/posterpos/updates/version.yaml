@@ -114,3 +114,6 @@
 1.1.38:
     - 'Add poster_accountable table'
     - add_poster_accountable_table.php
+1.1.39:
+    - 'Create hidden categories in city table'
+    - create_hidden_categories_in_city_table.php

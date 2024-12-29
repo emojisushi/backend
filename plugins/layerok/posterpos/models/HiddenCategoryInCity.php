@@ -3,17 +3,17 @@
 use October\Rain\Database\Model;
 use OFFLINE\Mall\Models\Category;
 
-class HideCategoryInCity extends Model
+class HiddenCategoryInCity extends Model
 {
-    protected $table = 'layerok_posterpos_hide_categories_in_city';
+    protected $table = 'layerok_posterpos_hidden_categories_in_city';
+
     protected $primaryKey = 'id';
     public $timestamps = false;
 
-    public $fillable = ['category_id', 'city_id', 'updated_at', 'created_at'];
+    public $fillable = ['category_id', 'city_id'];
 
     public $belongsTo = [
         'category' => Category::class,
         'city' => City::class,
     ];
-
 }
