@@ -7,7 +7,12 @@ use Layerok\PosterPos\Models\City;
 
 class AppService {
     public function getCurrentCitySlug(): string|null {
-        if($refererParts = explode('//', request()->header('referer'))) {
+        $referer = request()->header('referer');
+        if(!$referer) {
+            return null;
+        }
+        $refererParts = explode('//', $referer);
+        if($refererParts) {
             if(count($refererParts) > 1) {
                 return explode('.', $refererParts[1])[0];
             }
