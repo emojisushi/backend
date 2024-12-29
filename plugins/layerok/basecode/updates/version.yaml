@@ -1,1 +1,4 @@
 1.0.1: First version of BaseCode
+1.0.2:
+    - 'Create default admin user'
+    - create_default_admin_user.php
