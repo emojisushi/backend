@@ -82,6 +82,9 @@ class ImportData extends Command {
         Category::truncate();
         HideCategory::truncate();
         City::truncate();
+        Bot::truncate();
+        Chat::truncate();
+        District::truncate();
 
         DB::table('offline_mall_prices')->truncate();
 
@@ -111,28 +114,31 @@ class ImportData extends Command {
         $this->output->writeln('Creating cities...');
         $this->output->newLine();
 
+        $bot = Bot::create([
+            'token' => '5009009410:AAF1mz_UhdBxkgQ4GxTO7G2XVqxBwv-XYTU',
+            'name' => "Test bot",
+        ]);
+
+
+        $chat = Chat::create([
+            'internal_id' => '-587888839',
+            'name' => "Test chat",
+        ]);
+
         $odesaCity = new City([
             'name' => 'Odessa',
-            'slug' => 'odesa'
+            'slug' => 'odesa',
+            'phones' => '+38 (093) 366 28 69, +38 (068) 303 45 51'
         ]);
         $odesaCity->save();
 
         $chornomorskCity = new City([
             'name' => 'Chornomorsk',
-            'slug' => 'chorno'
+            'slug' => 'chorno',
         ]);
 
         $chornomorskCity->save();
 
-//        Bot::create([
-//            'token' => '2',
-//            'name' => 'Test bot'
-//        ]);
-//
-//        Chat::create([
-//            'chat_id' => '',
-//            'name' => 'Test chat'
-//        ]);
 
         $this->output->newLine();
         $this->output->writeln('Creating districts...');
@@ -142,6 +148,8 @@ class ImportData extends Command {
             'name' => 'Центр',
             'city_id' => $odesaCity->id
         ]);
+
+        $centerDistrict->save();
 
         $this->output->newLine();
         $this->output->writeln('Create uah currency...');
@@ -235,11 +243,6 @@ class ImportData extends Command {
         $this->output->progressStart($count);
 
         foreach ($records->response as $record) {
-            $bot = Bot::where('id', 1)->first();
-            $chat = Chat::where('id', 1)->first();
-
-            $bot_id = $bot ? $bot->id : null;
-            $chat_id = $chat ? $chat->id : null;
             $pass = "qweasdqweaasd";
 
             $user = User::create([
@@ -275,12 +278,13 @@ class ImportData extends Command {
             Spot::create([
                 'address_id' => $address->id,
                 'name' => $record->spot_name,
-                'bot_id' => $bot_id,
-                'chat_id' => $chat_id,
+                'chat_id' => $chat->id,
+                'bot_id' => $bot->id,
                 'poster_account_id' => $account->id,
                 'phones' => '+38 (093) 366 28 69, +38 (068) 303 45 51',
                 'poster_id' => $record->spot_id,
-                'district_id' => $centerDistrict->id
+                'district_id' => $centerDistrict->id,
+                'city_id' => $odesaCity->id,
             ]);
 
             $this->output->progressAdvance();

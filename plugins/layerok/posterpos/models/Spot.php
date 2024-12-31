@@ -37,6 +37,8 @@ class Spot extends Model
         'cover',
         'slug',
         'poster_id',
+        'district_id',
+        'city_id',
         'poster_account_id'
     ];
 

@@ -22,7 +22,7 @@ class District extends Model
     /**
      * @var array fillable attributes are mass assignable
      */
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'city_id'];
 
     /**
      * @var array rules for validation
