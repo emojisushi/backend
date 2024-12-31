@@ -20,6 +20,6 @@ class User extends UserBase
     ];
 
     public function isCallCenterAdmin(): bool {
-        return $this->email === 'callcenter@emojisushi.com.ua';
+        return $this->email === 'callcenter@emojisushi.com.ua' || $this->email === 'callcenter2@emojisushi.com.ua';
     }
 }
