@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Layerok\PosterPos\Models\Wishlist;
 use Layerok\Restapi\Services\AppService;
 use OFFLINE\Mall\Classes\CategoryFilter\SortOrder\SortOrder;
 use OFFLINE\Mall\Classes\Index\MySQL\IndexEntry;
@@ -18,9 +19,21 @@ class CatalogController extends Controller
     {
         return response()->json([
             'categories' => $this->getCategories(),
+            'wishlists' => $this->getWishlists(),
             'products' => $this->getProducts(),
             'sort_options' => collect(SortOrder::options(true))->keys(),
         ]);
+    }
+
+    public function getWishlists(): array {
+        $jwtGuard = app('JWTGuard');
+        $user = $jwtGuard->user();
+
+        $wishlists = Wishlist::byUser($user);
+
+        return $wishlists->first() ? [
+            $wishlists->first()
+        ]: [];
     }
 
     public function getCategories(): Collection {
