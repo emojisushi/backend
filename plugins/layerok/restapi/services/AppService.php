@@ -7,6 +7,7 @@ use Layerok\PosterPos\Models\City;
 
 class AppService {
     public function getCurrentCitySlug(): string|null {
+        return 'odesa';
         $referer = request()->header('referer');
         if(!$referer) {
             return null;

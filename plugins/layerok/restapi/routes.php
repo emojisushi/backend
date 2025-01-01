@@ -1,5 +1,6 @@
 <?php
 
+use Layerok\Restapi\Http\Controllers\CatalogController;
 use Layerok\Restapi\Http\Controllers\CustomerController;
 use Layerok\Restapi\Http\Controllers\SpotController;
 use Layerok\Restapi\Http\Controllers\UserController;
@@ -30,6 +31,7 @@ Route::group([
     ],
     'prefix' => 'api'
 ], function () {
+    Route::get('catalog', [CatalogController::class, 'index']);
     Route::get('products', [ProductController::class, 'fetch']);
     Route::get('categories', [CategoryController::class, 'fetch']);
     Route::get('spots', [SpotController::class, 'fetch']);
