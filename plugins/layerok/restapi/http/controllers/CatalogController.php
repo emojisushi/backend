@@ -108,7 +108,7 @@ class CatalogController extends Controller
         $itemIds = $items->pluck('id')
             ->toArray();
 
-        return Product::with(
+        $unorderedModels = Product::with(
             [
                 'variants',
                 'variants.property_values',
@@ -123,6 +123,13 @@ class CatalogController extends Controller
                 }
             ]
         )->find($itemIds);
+
+        // preserve order
+        return collect($itemIds)->map(function($itemId) use ($unorderedModels) {
+            return $unorderedModels->first(function($model) use ($itemId) {
+                return $model->id == $itemId;
+            });
+        });
     }
 
 }
