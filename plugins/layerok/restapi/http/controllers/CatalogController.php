@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Layerok\PosterPos\Models\Banner;
 use Layerok\PosterPos\Models\Wishlist;
 use Layerok\Restapi\Services\AppService;
 use OFFLINE\Mall\Classes\CategoryFilter\SortOrder\SortOrder;
@@ -20,10 +21,24 @@ class CatalogController extends Controller
         return response()->json([
             'categories' => $this->getCategories(),
             'wishlists' => $this->getWishlists(),
+            'banners' => $this->getBanners(),
             'products' => $this->getProducts(),
             'sort_options' => collect(SortOrder::options(true))->keys(),
         ]);
     }
+
+    public function getBanners (): array  {
+        $banners = Banner::with([
+            'image',
+            'image_small',
+            'product',
+            'product.categories'
+        ])->where('is_active', true)
+            ->orderBy('id', 'desc')
+            ->get();
+
+        return $banners->toArray();
+}
 
     public function getWishlists(): array {
         $jwtGuard = app('JWTGuard');
