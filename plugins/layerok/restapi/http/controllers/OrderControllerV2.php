@@ -289,6 +289,13 @@ class OrderControllerV2 extends Controller
             ];
         });
 
+        // todo: write a test for calculation of cart total
+        $total = $products->reduce(function($acc, $product) use($cart) {
+            $item = collect($cart['items'])->first(fn($item) => $item['id'] === (string)$product->id);
+            return $acc + $product->prices[0]->price * $item['quantity'];
+        }, 0);
+
+
         $receipt
             ->headline(htmlspecialchars($headline))
             ->field(
@@ -339,7 +346,7 @@ class OrderControllerV2 extends Controller
             })
             ->newLine()
             ->field(trans('layerok.restapi::lang.receipt.total'), $money->format(
-                $products->reduce(fn($acc, $product) => $acc + $product->prices[0]->price, 0),
+                $total,
                 null,
                 Currency::$defaultCurrency
             ));
