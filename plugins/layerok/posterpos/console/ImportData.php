@@ -128,13 +128,19 @@ class ImportData extends Command {
         $odesaCity = new City([
             'name' => 'Odessa',
             'slug' => 'odesa',
-            'phones' => '+38 (093) 366 28 69, +38 (068) 303 45 51'
+            'phones' => '+38 (093) 366 28 69, +38 (068) 303 45 51',
+            'frontend_url' => 'https://localhost:3000',
+            // todo: do I need thankyou_page_url at all?
+            'thankyou_page_url' => 'https://localhost:3000/thankyou',
         ]);
         $odesaCity->save();
 
         $chornomorskCity = new City([
             'name' => 'Chornomorsk',
             'slug' => 'chorno',
+            'frontend_url' => 'https://localhost:3000',
+            // todo: do I need thankyou_page_url at all?
+            'thankyou_page_url' => 'https://localhost:3000/thankyou',
         ]);
 
         $chornomorskCity->save();
