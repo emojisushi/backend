@@ -169,17 +169,25 @@ class OrderControllerV2 extends Controller
             // probably poster pos services are down
             $api = new Api($spot->bot->token);
 
-            $api->sendMessage([
-                'text' => $this->generateReceipt(
-                    trans("layerok.restapi::lang.receipt.order_sending_error"),
-                    $cart,
-                    $shippingMethod,
-                    $paymentMethod,
-                    $data
-                ),
-                'parse_mode' => "html",
-                'chat_id' => $spot->chat->internal_id
-            ]);
+            try {
+                $api->sendMessage([
+                    'text' => $this->generateReceipt(
+                        trans("layerok.restapi::lang.receipt.order_sending_error"),
+                        $cart,
+                        $shippingMethod,
+                        $paymentMethod,
+                        $data
+                    ),
+                    'parse_mode' => "html",
+                    'chat_id' => $spot->chat->internal_id
+                ]);
+            } catch (\Exception $exception) {
+                try {
+                    \Log::error($exception->getMessage());
+                } catch (\Exception $exception) {
+
+                }
+            }
 
             // todo: validate version
             $userWebClientVersion = request()->header('x-web-client-version');
@@ -205,18 +213,26 @@ class OrderControllerV2 extends Controller
 
         $poster_order_id = $posterResult->response->incoming_order_id + $add_to_poster_id;
 
-        // todo: wrap in try catch
-        $api->sendMessage([
-            'text' => $this->generateReceipt(
-                trans('layerok.restapi::lang.receipt.new_order') . ' #' . $poster_order_id,
-                $cart,
-                $shippingMethod,
-                $paymentMethod,
-                $data
-            ),
-            'parse_mode' => "html",
-            'chat_id' => $spot->chat->internal_id
-        ]);
+        try {
+            // В 1 хвилину 1 бот може надіслати не більше 20 повідомлень.
+            $api->sendMessage([
+                'text' => $this->generateReceipt(
+                    trans('layerok.restapi::lang.receipt.new_order') . ' #' . $poster_order_id,
+                    $cart,
+                    $shippingMethod,
+                    $paymentMethod,
+                    $data
+                ),
+                'parse_mode' => "html",
+                'chat_id' => $spot->chat->internal_id
+            ]);
+        } catch (\Exception $exception) {
+            try {
+                \Log::error($exception->getMessage());
+            } catch (\Exception $exception) {
+
+            }
+        }
 
         return response()->json([
             'success' => true,

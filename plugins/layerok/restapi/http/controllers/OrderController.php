@@ -186,17 +186,25 @@ class OrderController extends Controller
             // probably poster pos services are down
             $api = new Api($spot->bot->token);
 
-            $api->sendMessage([
-                'text' => $this->generateReceipt(
-                    trans("layerok.restapi::lang.receipt.order_sending_error"),
-                    $cart,
-                    $shippingMethod,
-                    $paymentMethod,
-                    $data
-                ),
-                'parse_mode' => "html",
-                'chat_id' => $spot->chat->internal_id
-            ]);
+            try {
+                $api->sendMessage([
+                    'text' => $this->generateReceipt(
+                        trans("layerok.restapi::lang.receipt.order_sending_error"),
+                        $cart,
+                        $shippingMethod,
+                        $paymentMethod,
+                        $data
+                    ),
+                    'parse_mode' => "html",
+                    'chat_id' => $spot->chat->internal_id
+                ]);
+            } catch (\Exception $e) {
+                try {
+                    \Log::error($e->getMessage());
+                } catch (\Exception $exception) {
+
+                }
+            }
 
             // todo: validate version
             $userWebClientVersion = request()->header('x-web-client-version');
@@ -222,18 +230,25 @@ class OrderController extends Controller
 
         $poster_order_id = $posterResult->response->incoming_order_id + $add_to_poster_id;
 
-        // todo: wrap in try catch
-        $telegramRes = $api->sendMessage([
-            'text' => $this->generateReceipt(
-                trans('layerok.restapi::lang.receipt.new_order') . ' #' . $poster_order_id,
-                $cart,
-                $shippingMethod,
-                $paymentMethod,
-                $data
-            ),
-            'parse_mode' => "html",
-            'chat_id' => $spot->chat->internal_id
-        ]);
+        try {
+            $telegramRes = $api->sendMessage([
+                'text' => $this->generateReceipt(
+                    trans('layerok.restapi::lang.receipt.new_order') . ' #' . $poster_order_id,
+                    $cart,
+                    $shippingMethod,
+                    $paymentMethod,
+                    $data
+                ),
+                'parse_mode' => "html",
+                'chat_id' => $spot->chat->internal_id
+            ]);
+        } catch (\Exception $e) {
+            try {
+                \Log::error($e->getMessage());
+            } catch (\Exception $exception) {
+
+            }
+        }
 
         if ($paymentMethod->code === 'wayforpay') {
             $way_products = $cart->products()->get()->map(function (CartProduct $cartProduct) {
