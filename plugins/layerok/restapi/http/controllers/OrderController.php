@@ -355,7 +355,7 @@ class OrderController extends Controller
         $receipt
             ->headline(htmlspecialchars($headline))
             ->field(
-                trans('layerok.restapi::lang.receipt.'),
+                trans('layerok.restapi::lang.receipt.first_name'),
                 htmlspecialchars($data['firstname'] ?? null)
             )
             ->field(
