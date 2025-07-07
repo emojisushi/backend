@@ -5,8 +5,6 @@ columns:
     name:
         label: Name
         searchable: true
-    district:
-        label: District
     city[name]:
         label: City
     tablet[name]:

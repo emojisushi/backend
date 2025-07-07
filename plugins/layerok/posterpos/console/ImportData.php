@@ -145,18 +145,6 @@ class ImportData extends Command {
 
         $chornomorskCity->save();
 
-
-        $this->output->newLine();
-        $this->output->writeln('Creating districts...');
-        $this->output->newLine();
-
-        $centerDistrict = new District([
-            'name' => 'Центр',
-            'city_id' => $odesaCity->id
-        ]);
-
-        $centerDistrict->save();
-
         $this->output->newLine();
         $this->output->writeln('Create uah currency...');
         $this->output->newLine();
@@ -248,6 +236,8 @@ class ImportData extends Command {
 
         $this->output->progressStart($count);
 
+        $spots = [];
+
         foreach ($records->response as $record) {
             $pass = "qweasdqweaasd";
 
@@ -281,7 +271,7 @@ class ImportData extends Command {
 
             // todo: save address as string
 
-            Spot::create([
+            $spots[] = Spot::create([
                 'address_id' => $address->id,
                 'name' => $record->spot_name,
                 'chat_id' => $chat->id,
@@ -289,7 +279,6 @@ class ImportData extends Command {
                 'poster_account_id' => $account->id,
                 'phones' => '+38 (093) 366 28 69, +38 (068) 303 45 51',
                 'poster_id' => $record->spot_id,
-                'district_id' => $centerDistrict->id,
                 'city_id' => $odesaCity->id,
             ]);
 
@@ -297,6 +286,20 @@ class ImportData extends Command {
         }
 
         $this->output->progressFinish();
+
+
+        $this->output->newLine();
+        $this->output->writeln('Creating districts...');
+        $this->output->newLine();
+
+        $centerDistrict = new District([
+            'name' => 'Центр',
+            'city_id' => $odesaCity->id,
+            'spot_id' => $spots[0]->id,
+        ]);
+
+        $centerDistrict->save();
+
 
         $this->output->newLine();
         $this->output->writeln('Creating tablets...');

@@ -117,3 +117,6 @@
 1.1.39:
     - 'Create hidden categories in city table'
     - create_hidden_categories_in_city_table.php
+1.1.40:
+    - 'Fix spot district relation fields'
+    - fix_spot_district_relation_fields.php

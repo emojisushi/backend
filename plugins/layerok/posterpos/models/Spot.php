@@ -37,7 +37,6 @@ class Spot extends Model
         'cover',
         'slug',
         'poster_id',
-        'district_id',
         'city_id',
         'poster_account_id'
     ];
@@ -76,8 +75,11 @@ class Spot extends Model
         'bot' => Bot::class,
         'city' => City::class,
         'tablet' => Tablet::class,
-        'district' => District::class,
         'posterAccount' => PosterAccount::class,
+    ];
+
+    public $hasMany = [
+        'districts' => District::class
     ];
 
     public function afterDelete() {
