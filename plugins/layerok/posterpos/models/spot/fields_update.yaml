@@ -32,10 +32,9 @@ fields:
     address:
         label: Address
         span: auto
-    district:
-        type: relation
+    districts:
         label: District
-        span: auto
+        type: relation
     google_map_url:
         label: Google map url
         span: auto

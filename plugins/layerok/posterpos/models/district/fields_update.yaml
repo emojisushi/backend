@@ -10,7 +10,8 @@ fields:
         label: City
         type: relation
         span: auto
-    spots:
-        label: Spots
+    spot:
+        label: Spot
         type: relation
+        span: auto
 
