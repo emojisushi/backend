@@ -12,7 +12,7 @@ docker-pull:
 docker-build:
 	docker compose build --pull
 
-init-app: composer-update generate-app-key symlink-storage migrate
+init-app: composer-install generate-app-key symlink-storage migrate
 
 composer-install:
 	docker compose run --rm composer install
