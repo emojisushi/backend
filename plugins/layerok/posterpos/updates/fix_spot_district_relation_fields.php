@@ -6,7 +6,7 @@ use October\Rain\Database\Schema\Blueprint;
 use Schema;
 use October\Rain\Database\Updates\Migration;
 
-class AddAvailabilityFields extends Migration
+class FixSpotDistrictRelationFields extends Migration
 {
     ///
     public function up()
