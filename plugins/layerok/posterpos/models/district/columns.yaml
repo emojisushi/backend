@@ -9,3 +9,5 @@ columns:
     name:
         label: Name
         searchable: true
+    spot[name]:
+        label: Spot

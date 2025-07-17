@@ -22,7 +22,7 @@ class District extends Model
     /**
      * @var array fillable attributes are mass assignable
      */
-    protected $fillable = ['name', 'city_id'];
+    protected $fillable = ['name', 'city_id', 'spot_id'];
 
     /**
      * @var array rules for validation
@@ -63,11 +63,10 @@ class District extends Model
      * @var array hasOne and other relations
      */
     public $hasOne = [];
-    public $hasMany = [
-        'spots' => Spot::class,
-    ];
+    public $hasMany = [];
     public $belongsTo = [
         'city' => City::class,
+        'spot' => Spot::class
     ];
     public $belongsToMany = [];
     public $morphTo = [];

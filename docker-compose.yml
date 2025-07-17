@@ -50,6 +50,10 @@ services:
 #    - dbdata:/var/lib/mysql/
     networks:
       - laravel
+#    healthcheck:
+#        test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+#        timeout: 20s
+#        retries: 10
 
   redis:
     image: "redis:alpine"
@@ -96,6 +100,9 @@ services:
       PHP_IDE_CONFIG: "serverName=${PHP_IDE_CONFIG_SERVER_NAME:-salesbox}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+#    depends_on:
+#        mysql:
+#            condition: service_healthy
 
   composer:
     build:
@@ -110,6 +117,8 @@ services:
     networks:
       - laravel
     entrypoint: ['composer', '--ignore-platform-reqs']
+    environment:
+        COMPOSER_MEMORY_LIMIT: "-1"
 
 #  npm:
 #    image: node:15.0.1
