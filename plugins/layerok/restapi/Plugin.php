@@ -1,4 +1,5 @@
-<?php namespace Layerok\RestApi;
+<?php
+namespace Layerok\RestApi;
 
 use Layerok\Restapi\Classes\Sort\Category;
 use Layerok\RestApi\Classes\Customer\DefaultSignUpHandler;
@@ -10,7 +11,7 @@ use Fruitcake\Cors\HandleCors;
 use Fruitcake\Cors\CorsServiceProvider;
 use Illuminate\Contracts\Http\Kernel;
 use Event;
-
+use RainLab\User\Models\User;
 
 /**
  * RestApi Plugin Information File
@@ -22,10 +23,10 @@ class Plugin extends PluginBase
     public function pluginDetails()
     {
         return [
-            'name'        => 'RestApi',
+            'name' => 'RestApi',
             'description' => 'No description provided yet...',
-            'author'      => 'Layerok',
-            'icon'        => 'icon-leaf'
+            'author' => 'Layerok',
+            'icon' => 'icon-leaf'
         ];
     }
 
@@ -36,7 +37,10 @@ class Plugin extends PluginBase
 
     public function boot()
     {
-       Event::listen('offline.mall.extendSortOrder', function() {
+        User::extend(function ($model) {
+            $model->addFillable(['bonuses']);
+        });
+        Event::listen('offline.mall.extendSortOrder', function () {
             return [
                 'default' => new Bestseller(),
                 'category' => new Category(),
@@ -53,6 +57,27 @@ class Plugin extends PluginBase
 
         $this->app[Kernel::class]->pushMiddleware(HandleCors::class);
     }
-
-
+    public function registerSettings()
+    {
+        return [
+            'settings' => [
+                'label' => 'Bonus settings',
+                'description' => 'Manage bonus settings.',
+                'category' => 'Bonus',
+                'icon' => 'icon-cog',
+                'class' => \Layerok\RestApi\Models\Settings::class,
+                'order' => 500,
+                'keywords' => 'bonus',
+            ],
+            'app_version_settings' => [
+                'label' => 'Allowed Mobile Versions Settings',
+                'description' => 'Manage app versions.',
+                'category' => 'Mobile App',
+                'icon' => 'icon-cog',
+                'class' => \Layerok\RestApi\Models\AppVersionSettings::class,
+                'order' => 510,
+                'keywords' => 'version',
+            ]
+        ];
+    }
 }

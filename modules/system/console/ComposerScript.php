@@ -18,7 +18,7 @@ class ComposerScript
     {
         self::clearMeta();
 
-        static::passthruArtisan('package:discover');
+        //static::passthruArtisan('package:discover');
     }
 
     /**

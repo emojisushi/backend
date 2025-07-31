@@ -1,0 +1,20 @@
+fields:
+  android_version:
+      label: "Android version at least:"
+      type: text
+      span: left
+      default: '0.0.1'
+  android_link:
+      label: "Android updater link"
+      type: text
+      span: right
+  ios_version:
+      label: "IOS version at least:"
+      type: text
+      span: left
+      default: '0.0.1'
+
+  ios_link:
+      label: "IOS updater link"
+      type: text
+      span: right
