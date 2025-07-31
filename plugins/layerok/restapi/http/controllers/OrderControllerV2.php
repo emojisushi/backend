@@ -13,6 +13,7 @@ use Layerok\PosterPos\Classes\ServiceMode;
 use Layerok\PosterPos\Classes\ShippingMethodCode;
 use Layerok\PosterPos\Models\Spot;
 use Layerok\PosterPos\Models\User;
+use Layerok\PosterPos\Models\PendingBonus;
 use October\Rain\Exception\ValidationException;
 use OFFLINE\Mall\Classes\Utils\Money;
 use OFFLINE\Mall\Models\Currency;
@@ -22,6 +23,7 @@ use Layerok\PosterPos\Models\PosterAccount;
 use OFFLINE\Mall\Models\Product;
 use poster\src\PosterApi;
 use Telegram\Bot\Api;
+use Layerok\RestApi\Models\Settings;
 
 class OrderControllerV2 extends Controller
 {
@@ -46,14 +48,14 @@ class OrderControllerV2 extends Controller
 
         // todo: micro optimization. Query the user only if the spot is temporarily unavailable
         /** @var User | null $user */
-        $user = $rainlablUser ? User::find($rainlablUser->id): null;
+        $user = $rainlablUser ? User::find($rainlablUser->id) : null;
 
         /**
          * @var Spot $spot
          */
         $spot = Spot::find($data['spot_id']);
 
-        if($spot->temporarily_unavailable && !($user && $user->isCallCenterAdmin())) {
+        if ($spot->temporarily_unavailable && !($user && $user->isCallCenterAdmin())) {
             // admins are allowed to bypass this check
             throw new \ValidationException([trans('layerok.restapi::validation.temporarily_unavailable')]);
         }
@@ -68,8 +70,8 @@ class OrderControllerV2 extends Controller
         ])->whereIn('id', collect($cart['items'])->map(fn($item) => $item['id']))->get();
 
         /** @var Collection $posterProducts */
-        $posterProducts = $products->map(function (Product $product) use($poster_account, $cart) {
-            $cartProduct = collect($cart['items'])->first(fn ($item) => $item['id'] === (string)$product->id);
+        $posterProducts = $products->map(function (Product $product) use ($poster_account, $cart) {
+            $cartProduct = collect($cart['items'])->first(fn($item) => $item['id'] === (string) $product->id);
 
             $emojibar_bar_account = $product->poster_accounts->first(
                 fn(PosterAccount $account) => $account->account_name === self::DEFAULT_POSTER_ACCOUNT_NAME
@@ -91,12 +93,12 @@ class OrderControllerV2 extends Controller
         });
 
         if (intval($data['sticks']) > 0) {
-            $posterSticks = $posterProducts->first(function($posterProduct) {
+            $posterSticks = $posterProducts->first(function ($posterProduct) {
                 return $posterProduct['product_id'] === $this->getSticksPosterId();
             });
 
-            if($posterSticks) {
-                $posterProducts = $posterProducts->filter(function($posterProduct)  {
+            if ($posterSticks) {
+                $posterProducts = $posterProducts->filter(function ($posterProduct) {
                     return $posterProduct['product_id'] !== $this->getSticksPosterId();
                 });
             }
@@ -125,7 +127,11 @@ class OrderControllerV2 extends Controller
             ->map(fn($part) => ($part[0] ? $part[0] . ': ' : '') . $part[1])
             ->join(' || ');
 
-
+        // todo: write a test for calculation of cart total
+        $total = $products->reduce(function ($acc, $product) use ($cart) {
+            $item = collect($cart['items'])->first(fn($item) => $item['id'] === (string) $product->id);
+            return $acc + $product->prices[0]->price * $item['quantity'];
+        }, 0);
         $incomingOrder = [
             'spot_id' => $spot->tablet->tablet_id,
             'phone' => $data['phone'],
@@ -144,10 +150,27 @@ class OrderControllerV2 extends Controller
         if ($shippingMethod->code === ShippingMethodCode::TAKEAWAY) {
             $incomingOrder['service_mode'] = ServiceMode::TAKEAWAY;
         }
-
+        if ($user) {
+            $usedBonus = 0;
+            if (isset($data['bonuses_to_use'])) {
+                if (!(bool) Settings::get('bonus_enabled')) {
+                    return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => ['Bonuses are disabled']]], 400);
+                }
+                $usedBonus = $data['bonuses_to_use'];
+            }
+            if ($usedBonus > $user->bonus_amount) {
+                return response()->json('Not enough bonuses', 400);
+            }
+            $max = Settings::get('max_bonus');
+            if ($usedBonus > $total / 100 * $max) {
+                return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [trans("layerok.restapi::validation.bonus_limit", ['max' => $max])]]], 400);
+            }
+        }
         // todo: create DTO for the poster order
-        $posterResult = (object)PosterApi::incomingOrders()
+        $posterResult = (object) PosterApi::incomingOrders()
             ->createIncomingOrder($incomingOrder);
+
+
 
         if (isset($posterResult->error)) {
             $key = 'layerok.restapi::lang.poster.errors.' . $posterResult->error;
@@ -165,7 +188,7 @@ class OrderControllerV2 extends Controller
             ]);
         }
 
-        if(!isset($posterResult->response)) {
+        if (!isset($posterResult->response)) {
             // probably poster pos services are down
             $api = new Api($spot->bot->token);
 
@@ -181,7 +204,7 @@ class OrderControllerV2 extends Controller
                     'parse_mode' => "html",
                     'chat_id' => $spot->chat->internal_id
                 ]);
-            } catch (\Exception $exception) {
+            } catch (\Throwable $exception) {
                 try {
                     \Log::error($exception->getMessage());
                 } catch (\Exception $exception) {
@@ -192,13 +215,13 @@ class OrderControllerV2 extends Controller
             // todo: validate version
             $userWebClientVersion = request()->header('x-web-client-version');
 
-            if(!$userWebClientVersion) {
+            if (!$userWebClientVersion) {
                 throw new \ValidationException([
                     trans('layerok.restapi::validation.send_order_error')
                 ]);
             }
 
-            if(Comparator::compare($userWebClientVersion, '<', '2024.2.11')) {
+            if (Comparator::compare($userWebClientVersion, '<', '2024.2.11')) {
                 throw new \ValidationException([
                     trans('layerok.restapi::validation.send_order_error')
                 ]);
@@ -212,6 +235,27 @@ class OrderControllerV2 extends Controller
         $api = new Api($spot->bot->token);
 
         $poster_order_id = $posterResult->response->incoming_order_id + $add_to_poster_id;
+
+        if ($user) {
+            $usedBonus = 0;
+            if (isset($data['bonuses_to_use'])) {
+                $usedBonus = $data['bonuses_to_use'];
+            }
+            $bonusRate = Settings::get('bonus_rate');
+            $dif = 0;
+            if (!(bool)Settings::get('get_bonus_from_used_bonus')) {
+                $dif = $usedBonus; // отнимаем бонусы от стоимости заказа
+            }
+            PendingBonus::create([
+                'order_id' => $poster_order_id,
+                'user_id' => $user->id,
+                'receive_bonus_amount' => floor(($total - $dif) / 100 * ($bonusRate / 100)),
+                'use_bonus_amount' => $usedBonus,
+                'pending' => true,
+            ]);
+            $user->bonus_amount -= $usedBonus;
+            $user->save();
+        }
 
         try {
             // В 1 хвилину 1 бот може надіслати не більше 20 повідомлень.
@@ -296,8 +340,8 @@ class OrderControllerV2 extends Controller
         ])->whereIn('id', collect($cart['items'])->map(fn($item) => $item['id']))->get();
 
 
-        $receiptProducts = $products->map(function (Product $product) use($cart) {
-            $cartProduct = collect($cart['items'])->first(fn ($item) => $item['id'] === (string)$product->id);
+        $receiptProducts = $products->map(function (Product $product) use ($cart) {
+            $cartProduct = collect($cart['items'])->first(fn($item) => $item['id'] === (string) $product->id);
 
             return [
                 'name' => $product['name'],
@@ -306,11 +350,10 @@ class OrderControllerV2 extends Controller
         });
 
         // todo: write a test for calculation of cart total
-        $total = $products->reduce(function($acc, $product) use($cart) {
-            $item = collect($cart['items'])->first(fn($item) => $item['id'] === (string)$product->id);
+        $total = $products->reduce(function ($acc, $product) use ($cart) {
+            $item = collect($cart['items'])->first(fn($item) => $item['id'] === (string) $product->id);
             return $acc + $product->prices[0]->price * $item['quantity'];
         }, 0);
-
 
         $receipt
             ->headline(htmlspecialchars($headline))
@@ -370,11 +413,13 @@ class OrderControllerV2 extends Controller
         return $receipt->getText();
     }
 
-    public function isDebugOn() {
+    public function isDebugOn()
+    {
         return !!request()->header('x-debug-mode');
     }
 
-    public function getSticksPosterId() {
+    public function getSticksPosterId()
+    {
         return Config::get('layerok.restapi::order.sushi_sticks_poster_id');
     }
 }

@@ -1,1 +1,7 @@
 1.0.1: First version of RestApi
+1.0.2:
+    - 'Add bonus_amount to users table'
+    - add_bonuses_to_users_table.php
+1.0.3:
+    - 'Add pending bonuses table'
+    - add_pending_bonuses_table.php

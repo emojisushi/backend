@@ -1,10 +1,12 @@
 <?php
 
+use Layerok\Restapi\Http\Controllers\BonusController;
 use Layerok\Restapi\Http\Controllers\CatalogController;
 use Layerok\Restapi\Http\Controllers\CheckoutController;
 use Layerok\Restapi\Http\Controllers\CustomerController;
 use Layerok\Restapi\Http\Controllers\SpotController;
 use Layerok\Restapi\Http\Controllers\UserController;
+use Layerok\Restapi\Http\Controllers\VersionController;
 use Layerok\Restapi\Http\Middleware\ExceptionsMiddleware;
 use \Layerok\Restapi\Http\Controllers\ProductController;
 use \Layerok\Restapi\Http\Controllers\CategoryController;
@@ -46,26 +48,26 @@ Route::group([
     Route::get('payments', [PaymentMethodController::class, 'all']);
     Route::get('banners', [BannerController::class, 'all']);
     Route::get('ingredients', [IngredientController::class, 'all']);
-    Route::prefix('order')->group(function() {
+    Route::prefix('order')->group(function () {
         Route::post('place', [OrderController::class, 'place']);
     });
-    Route::prefix('order/v2')->group(function() {
+    Route::prefix('order/v2')->group(function () {
         Route::post('place', [OrderControllerV2::class, 'place']);
     });
 
-    Route::prefix('cart')->group(function() {
+    Route::prefix('cart')->group(function () {
         Route::get('products', [CartController::class, 'all']);
         Route::post('add', [CartController::class, 'add']);
         Route::post('remove', [CartController::class, 'remove']);
         Route::post('clear', [CartController::class, 'clear']);
     });
 
-    Route::prefix('wishlist')->group(function() {
+    Route::prefix('wishlist')->group(function () {
         Route::get('add', [WishlistController::class, 'add']);
         Route::get('list', [WishlistController::class, 'list']);
     });
 
-    Route::prefix('auth')->group(function() {
+    Route::prefix('auth')->group(function () {
         Route::post('login', [AuthController::class, 'login']);
         Route::post('register', [AuthController::class, 'register']);
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
@@ -76,15 +78,19 @@ Route::group([
         Route::post('activate', ActivationController::class);
     });
 
-    Route::prefix('clients')->group(function() {
+    Route::prefix('clients')->group(function () {
         Route::get('promotions', [PromotionController::class, 'list']);
     });
+
+    Route::get('bonuses', [BonusController::class, 'fetch']);
+    Route::get('bonuses/options', [BonusController::class, 'options']);
+    Route::get('app-version', [VersionController::class, 'fetchMobileVersion']);
 
     Route::group([
         'middleware' => [
             \ReaZzon\JWTAuth\Http\Middlewares\ResolveUser::class
         ]
-    ], function() {
+    ], function () {
         Route::get('user', [UserController::class, 'fetch']);
         Route::post('user', [UserController::class, 'save']);
         Route::post('user/password', [UserController::class, 'updatePassword']);
@@ -94,11 +100,13 @@ Route::group([
         Route::post('user/address/default', [UserController::class, 'setDefaultAddress']);
 
         Route::post('user/customer', [CustomerController::class, 'save']);
+        Route::get('user/bonus/history', [BonusController::class, 'history']);
+
     });
 
-    Route::post('/log', function() {
-       $content =  \Illuminate\Support\Facades\Request::getContent();
-       \Illuminate\Support\Facades\Log::error($content);
+    Route::post('/log', function () {
+        $content = \Illuminate\Support\Facades\Request::getContent();
+        \Illuminate\Support\Facades\Log::error($content);
     });
 
 });

@@ -1,0 +1,37 @@
+fields:
+    bonus_enabled:
+        label: "Бонусы включены"
+        type: switch
+        span: left
+        default: false
+    bonus_rate:
+        label: "Процент бонусов (кешбэк) от стоимости заказа (0-100%)"
+        type: number
+        span: left
+        min: 0
+        max: 100
+        default: 5
+        trigger:
+            action: enable
+            field: bonus_enabled
+            condition: checked
+    max_bonus:
+        label: "Какой процент заказа можно оплатить бонусами  (0-100%)"
+        type: number
+        span: left
+        min: 0
+        max: 100
+        default: 50
+        trigger:
+            action: enable
+            field: bonus_enabled
+            condition: checked
+    get_bonus_from_used_bonus:
+        label: "Получать ли бонусы за плату бонусами"
+        type: switch
+        span: left
+        default: false
+        trigger:
+            action: enable
+            field: bonus_enabled
+            condition: checked
