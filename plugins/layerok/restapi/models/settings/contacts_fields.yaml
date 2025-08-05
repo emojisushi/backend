@@ -1,0 +1,39 @@
+tabs:
+    fields:
+        instagram_display_text:
+            label: "Instagram display text"
+            type: text
+            default: ""
+            tab: Instagram
+        instagram_app_link:
+            label: "Instagram app link"
+            type: text
+            span: left
+            default: ""
+            comment: "instagram://user?username=IGN"
+            tab: Instagram
+        instagram_web_link:
+            label: "Instagram web link"
+            type: text
+            span: right
+            default: ""
+            tab: Instagram
+
+        telegram_display_text:
+            label: "Telegram display text"
+            type: text
+            default: ""
+            tab: Telegram
+        telegram_app_link:
+            label: "Telegram app link"
+            type: text
+            span: left
+            default: ""
+            comment: "tg://resolve?domain=TELEGRAM_NAME"
+            tab: Telegram
+        telegram_web_link:
+            label: "Telegram web link"
+            type: text
+            span: right
+            default: ""
+            tab: Telegram
