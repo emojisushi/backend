@@ -3,6 +3,7 @@
 use Layerok\Restapi\Http\Controllers\BonusController;
 use Layerok\Restapi\Http\Controllers\CatalogController;
 use Layerok\Restapi\Http\Controllers\CheckoutController;
+use Layerok\Restapi\Http\Controllers\ContactsController;
 use Layerok\Restapi\Http\Controllers\CustomerController;
 use Layerok\Restapi\Http\Controllers\SpotController;
 use Layerok\Restapi\Http\Controllers\UserController;
@@ -85,6 +86,7 @@ Route::group([
     Route::get('bonuses', [BonusController::class, 'fetch']);
     Route::get('bonuses/options', [BonusController::class, 'options']);
     Route::get('app-version', [VersionController::class, 'fetchMobileVersion']);
+    Route::get('contacts', [ContactsController::class, 'contacts']);
 
     Route::group([
         'middleware' => [

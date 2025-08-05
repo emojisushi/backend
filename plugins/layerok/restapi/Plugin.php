@@ -77,6 +77,15 @@ class Plugin extends PluginBase
                 'class' => \Layerok\RestApi\Models\AppVersionSettings::class,
                 'order' => 510,
                 'keywords' => 'version',
+            ],
+            'contacts_settings' => [
+                'label' => 'Change Contacts links',
+                'description' => 'Change Contacts links.',
+                'category' => 'Contacts',
+                'icon' => 'icon-cog',
+                'class' => \Layerok\RestApi\Models\ContactsSettings::class,
+                'order' => 510,
+                'keywords' => 'contact',
             ]
         ];
     }
