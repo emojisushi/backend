@@ -1,0 +1,36 @@
+columns:
+    id:
+        label: ID
+        searchable: true
+
+    name_ua:
+        label: Назва (UA)
+        searchable: true
+
+    name_ru:
+        label: Название (RU)
+        searchable: true
+
+    lon:
+        label: Довгота
+        searchable: false
+
+    lat:
+        label: Широта
+        searchable: false
+
+    suburb_ua:
+        label: Район (UA)
+        searchable: true
+
+    suburb_ru:
+        label: Район (RU)
+        searchable: true
+recordOnClick: focusOn(:id)
+    # created_at:
+    #     label: Створено
+    #     type: datetime
+
+    # updated_at:
+    #     label: Оновлено
+    #     type: datetime

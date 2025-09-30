@@ -79,7 +79,8 @@ class Spot extends Model
     ];
 
     public $hasMany = [
-        'districts' => District::class
+        'districts' => District::class,
+        'areas' => \Layerok\PosterPos\Models\Area::class,
     ];
 
     public function afterDelete() {

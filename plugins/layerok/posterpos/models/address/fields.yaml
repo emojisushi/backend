@@ -1,0 +1,31 @@
+location:
+    fields:
+        name_ua:
+            label: Назва (UA)
+            span: auto
+            type: text
+
+        name_ru:
+            label: Название (RU)
+            span: auto
+            type: text
+
+        lon:
+            label: Довгота (Longitude)
+            span: left
+            type: text
+
+        lat:
+            label: Широта (Latitude)
+            span: right
+            type: text
+
+        suburb_ua:
+            label: Район (UA)
+            span: right
+            type: text
+
+        suburb_ru:
+            label: Район (RU)
+            span: right
+            type: text
