@@ -24,6 +24,9 @@ use OFFLINE\Mall\Models\Product;
 use poster\src\PosterApi;
 use Telegram\Bot\Api;
 use Layerok\RestApi\Models\Settings;
+use Layerok\PosterPos\Models\Address;
+use Layerok\PosterPos\Models\AddressSettings;
+use Layerok\PosterPos\Models\Area;
 
 class OrderControllerV2 extends Controller
 {
@@ -143,8 +146,30 @@ class OrderControllerV2 extends Controller
         ];
 
         if ($shippingMethod->code === ShippingMethodCode::COURIER) {
+            $spotId = null;
             $incomingOrder['service_mode'] = ServiceMode::COURIER;
-            $incomingOrder['address'] = $data['address'] ?? null;
+            if (AddressSettings::get('enable_address_system')) {
+                $address = Address::find($data['address']);
+                $areas = Area::all();
+                foreach ($areas as $area) {
+                    if (
+                        $this->pointInPolygon(
+                            $address->lat,
+                            $address->lon,
+                            $area['coords']
+                        )
+                    ) {
+                        $spotId = $area['spot_id'];
+                        break;
+                    }
+                }
+                $incomingOrder['spot_id'] = Spot::find($spotId)->tablet->tablet_id;
+                $incomingOrder['address'] = $address->name_ua . ', ' . $address->suburb_ua . ', ' . $data['address_details'] ?? null;
+
+
+            } else {
+                $incomingOrder['address'] = $data['address'] ?? null;
+            }
         }
 
         if ($shippingMethod->code === ShippingMethodCode::TAKEAWAY) {
@@ -243,7 +268,7 @@ class OrderControllerV2 extends Controller
             }
             $bonusRate = Settings::get('bonus_rate');
             $dif = 0;
-            if (!(bool)Settings::get('get_bonus_from_used_bonus')) {
+            if (!(bool) Settings::get('get_bonus_from_used_bonus')) {
                 $dif = $usedBonus; // отнимаем бонусы от стоимости заказа
             }
             PendingBonus::create([
@@ -421,5 +446,58 @@ class OrderControllerV2 extends Controller
     public function getSticksPosterId()
     {
         return Config::get('layerok.restapi::order.sushi_sticks_poster_id');
+    }
+
+    private function pointInPolygon($x, $y, $poly)
+    {
+        $c = false;
+        $l = count($poly);
+
+        for ($i = 0, $j = $l - 1; $i < $l; $j = $i++) {
+            $xj = $poly[$j][0];
+            $yj = $poly[$j][1];
+            $xi = $poly[$i][0];
+            $yi = $poly[$i][1];
+
+            $where = ($yi - $yj) * ($x - $xi) - ($xi - $xj) * ($y - $yi);
+
+            if ($yj < $yi) {
+                if ($y >= $yj && $y < $yi) {
+                    if ($where == 0)
+                        return true; // point on the line
+                    if ($where > 0) {
+                        if ($y == $yj) {
+                            // ray intersects vertex
+                            $prevIndex = ($j == 0) ? $l - 1 : $j - 1;
+                            if ($y > $poly[$prevIndex][1]) {
+                                $c = !$c;
+                            }
+                        } else {
+                            $c = !$c;
+                        }
+                    }
+                }
+            } elseif ($yi < $yj) {
+                if ($y > $yi && $y <= $yj) {
+                    if ($where == 0)
+                        return true; // point on the line
+                    if ($where < 0) {
+                        if ($y == $yj) {
+                            // ray intersects vertex
+                            $prevIndex = ($j == 0) ? $l - 1 : $j - 1;
+                            if ($y < $poly[$prevIndex][1]) {
+                                $c = !$c;
+                            }
+                        } else {
+                            $c = !$c;
+                        }
+                    }
+                }
+            } elseif ($y == $yi && (($x >= $xj && $x <= $xi) || ($x >= $xi && $x <= $xj))) {
+                return true; // point on horizontal edge
+            }
+        }
+
+        return $c;
     }
 }

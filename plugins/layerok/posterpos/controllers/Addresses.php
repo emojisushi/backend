@@ -3,6 +3,9 @@ namespace Layerok\PosterPos\Controllers;
 
 use BackendMenu;
 use Backend\Classes\Controller;
+use Illuminate\Http\JsonResponse;
+use Layerok\PosterPos\Models\AddressSettings;
+use Layerok\PosterPos\Models\Spot;
 
 /**
  * Cities Backend Controller
@@ -85,19 +88,19 @@ class Addresses extends Controller
             'addresses' => $addresses
         ];
     }
-    public function onUpdateAddress()
-    {
-        $recordId = post('id');
-        $model = \layerok\PosterPos\Models\Address::find($recordId);
+    // public function onUpdateAddress()
+    // {
+    //     $recordId = post('id');
+    //     $model = \layerok\PosterPos\Models\Address::find($recordId);
 
-        $this->vars['formWidget'] = $this->makeWidget(\Backend\Widgets\Form::class, [
-            'model' => $model,
-            'alias' => 'addressForm',
-            'config' => '$/layerok/models/address/fields.yaml'
-        ]);
+    //     $this->vars['formWidget'] = $this->makeWidget(\Backend\Widgets\Form::class, [
+    //         'model' => $model,
+    //         'alias' => 'addressForm',
+    //         'config' => '$/layerok/models/address/fields.yaml'
+    //     ]);
 
-        return $this->makePartial('partials/update_address');
-    }
+    //     return $this->makePartial('partials/update_address');
+    // }
     public function onSaveAddress()
     {
         $id = post('id');
@@ -199,6 +202,122 @@ class Addresses extends Controller
         return [
             'spots' => \Layerok\PosterPos\Models\Spot::all(['id', 'name'])->toArray()
         ];
+    }
+    public function onToggleAddressSystem()
+    {
+        $enabled = \Layerok\PosterPos\Models\AddressSettings::get('enable_address_system', true);
+
+        \Layerok\PosterPos\Models\AddressSettings::set('enable_address_system', !$enabled);
+
+        return [
+            '#toggle-address-container' => $this->makePartial('toggle_button')
+        ];
+    }
+
+    public function options(): JsonResponse
+    {
+        $enabled = (bool) AddressSettings::get('enable_address_system');
+
+        return response()->json(['enable_address_system' => $enabled]);
+    }
+    public function Addresses()
+    {
+        $areas = \Layerok\PosterPos\Models\Area::all()->map(function ($area) {
+            return [
+                'coords' => is_string($area->coords) ? json_decode($area->coords, true) : $area->coords,
+                'spot_id' => $area->spot_id,
+            ];
+        });
+        $spotMap = Spot::pluck('name', 'id')->toArray();
+        $addresses = \layerok\PosterPos\Models\Address::all([
+            'Id',
+            'name_ua',
+            'name_ru',
+            'suburb_ua',
+            'suburb_ru',
+            'lon',
+            'lat',
+        ]);
+        $result = $addresses->map(function ($address) use ($areas, $spotMap) {
+            $spotId = null;
+            $spotName = null;
+            foreach ($areas as $area) {
+                if (
+                    $this->pointInPolygon(
+                        $address->lat,
+                        $address->lon,
+                        $area['coords']
+                    )
+                ) {
+                    $spotId = $area['spot_id'];
+                    $spotName = $spotMap[$spotId] ?? null;
+                    break;
+                }
+            }
+
+            return [
+                'id' => $address->Id,
+                'name_ua' => $address->name_ua,
+                'name_ru' => $address->name_ru,
+                'suburb_ua' => $address->suburb_ua,
+                'suburb_ru' => $address->suburb_ru,
+                'spot_name' => $spotName,
+            ];
+        });
+
+        return ['addresses' => $result];
+    }
+    private function pointInPolygon($x, $y, $poly)
+    {
+        $c = false;
+        $l = count($poly);
+
+        for ($i = 0, $j = $l - 1; $i < $l; $j = $i++) {
+            $xj = $poly[$j][0];
+            $yj = $poly[$j][1];
+            $xi = $poly[$i][0];
+            $yi = $poly[$i][1];
+
+            $where = ($yi - $yj) * ($x - $xi) - ($xi - $xj) * ($y - $yi);
+
+            if ($yj < $yi) {
+                if ($y >= $yj && $y < $yi) {
+                    if ($where == 0)
+                        return true; // point on the line
+                    if ($where > 0) {
+                        if ($y == $yj) {
+                            // ray intersects vertex
+                            $prevIndex = ($j == 0) ? $l - 1 : $j - 1;
+                            if ($y > $poly[$prevIndex][1]) {
+                                $c = !$c;
+                            }
+                        } else {
+                            $c = !$c;
+                        }
+                    }
+                }
+            } elseif ($yi < $yj) {
+                if ($y > $yi && $y <= $yj) {
+                    if ($where == 0)
+                        return true; // point on the line
+                    if ($where < 0) {
+                        if ($y == $yj) {
+                            // ray intersects vertex
+                            $prevIndex = ($j == 0) ? $l - 1 : $j - 1;
+                            if ($y < $poly[$prevIndex][1]) {
+                                $c = !$c;
+                            }
+                        } else {
+                            $c = !$c;
+                        }
+                    }
+                }
+            } elseif ($y == $yi && (($x >= $xj && $x <= $xi) || ($x >= $xi && $x <= $xj))) {
+                return true; // point on horizontal edge
+            }
+        }
+
+        return $c;
     }
 
 }

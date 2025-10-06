@@ -1,6 +1,6 @@
 <div class="control-toolbar"></div>
 
-<div id="address-map" style="height: 450px; width: 100%"></div>
+<div id="address-map" style="height: 420px; width: 100%"></div>
 
 <script>
     function ptinpoly(x, y, poly) {
@@ -551,6 +551,8 @@
             data: { id, name_ua, name_ru, suburb_ua, suburb_ru },
             success: function () {
                 alert("Збережено");
+                layerGroup.clearLayers();
+                loadAreas();
             },
         });
     }
