@@ -13,7 +13,7 @@ class AddAreasTable extends Migration
         Schema::create('areas', function (Blueprint $table) {
             $table->id();
             $table->unsignedInteger('spot_id')->nullable()->index();
-            $table->foreign('spot_id')->references('id')->on('layerok_posterpos_spots')->onDelete('cascade');
+            $table->foreign('spot_id')->references('id')->on('layerok_posterpos_spots')->onDelete('set null');
             $table->string('name');
             $table->string('description')->nullable();
             $table->string('color')->nullable();
