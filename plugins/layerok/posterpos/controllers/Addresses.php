@@ -1,4 +1,5 @@
 <?php
+
 namespace Layerok\PosterPos\Controllers;
 
 use BackendMenu;
@@ -65,6 +66,7 @@ class Addresses extends Controller
     {
         $this->addJs('https://unpkg.com/leaflet/dist/leaflet.js');
         $this->addJs('https://unpkg.com/leaflet-draw/dist/leaflet.draw.js');
+        $this->addJs('/plugins/layerok/posterpos/controllers/addresses/js/map.js', ['defer' => true]);
         $this->addCss('https://unpkg.com/leaflet/dist/leaflet.css');
         $this->addCss('https://unpkg.com/leaflet-draw/dist/leaflet.draw.css');
 
@@ -222,14 +224,31 @@ class Addresses extends Controller
     }
     public function Addresses()
     {
-        $areas = \Layerok\PosterPos\Models\Area::all()->map(function ($area) {
-            return [
-                'coords' => is_string($area->coords) ? json_decode($area->coords, true) : $area->coords,
-                'spot_id' => $area->spot_id,
-            ];
-        });
-        $spotMap = Spot::pluck('name', 'id')->toArray();
-        $addresses = \layerok\PosterPos\Models\Address::all([
+        $slug = input('city_slug');
+
+        if (!$slug) {
+            return ['addresses' => []];
+        }
+
+        $city = \Layerok\PosterPos\Models\City::where('slug', $slug)->first();
+
+        if (!$city) {
+            return ['addresses' => []];
+        }
+
+        $spots = \Layerok\PosterPos\Models\Spot::where('city_id', $city->id)->get();
+        $spotMap = $spots->pluck('name', 'id')->toArray();
+
+        $areas = \Layerok\PosterPos\Models\Area::whereIn('spot_id', $spots->pluck('id'))
+            ->get()
+            ->map(function ($area) {
+                return [
+                    'coords' => is_string($area->coords) ? json_decode($area->coords, true) : $area->coords,
+                    'spot_id' => $area->spot_id,
+                ];
+            });
+
+        $addresses = \Layerok\PosterPos\Models\Address::all([
             'Id',
             'name_ua',
             'name_ru',
@@ -238,21 +257,21 @@ class Addresses extends Controller
             'lon',
             'lat',
         ]);
+
         $result = $addresses->map(function ($address) use ($areas, $spotMap) {
             $spotId = null;
             $spotName = null;
+
             foreach ($areas as $area) {
-                if (
-                    $this->pointInPolygon(
-                        $address->lat,
-                        $address->lon,
-                        $area['coords']
-                    )
-                ) {
+                if ($this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
                     $spotId = $area['spot_id'];
                     $spotName = $spotMap[$spotId] ?? null;
                     break;
                 }
+            }
+
+            if (!$spotId) {
+                return null;
             }
 
             return [
@@ -263,9 +282,9 @@ class Addresses extends Controller
                 'suburb_ru' => $address->suburb_ru,
                 'spot_name' => $spotName,
             ];
-        });
+        })->filter();
 
-        return ['addresses' => $result];
+        return ['addresses' => $result->values()];
     }
     private function pointInPolygon($x, $y, $poly)
     {
@@ -319,5 +338,4 @@ class Addresses extends Controller
 
         return $c;
     }
-
 }

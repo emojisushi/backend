@@ -38,7 +38,10 @@ class Spot extends Model
         'slug',
         'poster_id',
         'city_id',
-        'poster_account_id'
+        'poster_account_id',
+        'merchant_account',
+        'merchant_secret_key',
+        'domain_name',
     ];
 
     public $slugs = [

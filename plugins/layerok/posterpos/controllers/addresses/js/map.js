@@ -1,0 +1,648 @@
+function ptinpoly(x, y, poly) {
+    let c = false;
+    for (let l = poly.length, i = 0, j = l - 1; i < l; j = i++) {
+        let xj = poly[j][0],
+            yj = poly[j][1],
+            xi = poly[i][0],
+            yi = poly[i][1];
+        let where = (yi - yj) * (x - xi) - (xi - xj) * (y - yi);
+        if (yj < yi) {
+            if (y >= yj && y < yi) {
+                if (where == 0) return true; // point on the line
+                if (where > 0) {
+                    if (y == yj) {
+                        // ray intersects vertex
+                        if (y > poly[j == 0 ? l - 1 : j - 1][1]) {
+                            c = !c;
+                        }
+                    } else {
+                        c = !c;
+                    }
+                }
+            }
+        } else if (yi < yj) {
+            if (y > yi && y <= yj) {
+                if (where == 0) return true; // point on the line
+                if (where < 0) {
+                    if (y == yj) {
+                        // ray intersects vertex
+                        if (y < poly[j == 0 ? l - 1 : j - 1][1]) {
+                            c = !c;
+                        }
+                    } else {
+                        c = !c;
+                    }
+                }
+            }
+        } else if (y == yi && ((x >= xj && x <= xi) || (x >= xi && x <= xj))) {
+            return true; // point on horizontal edge
+        }
+    }
+    return c;
+}
+function pointInPolygon(point, vs) {
+    var x = Number.parseFloat(point[0]),
+        y = Number.parseFloat(point[1]);
+    var inside = false;
+    for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+        var xi = Number.parseFloat(vs[i][0]),
+            yi = Number.parseFloat(vs[i][1]);
+        var xj = Number.parseFloat(vs[j][0]),
+            yj = Number.parseFloat(vs[j][1]);
+
+        var intersect =
+            yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+let areaLayers = {};
+let areas = [];
+var drawnItems = new L.FeatureGroup();
+var selectAreaControl = L.Control.extend({
+    options: { position: "topright" },
+    onAdd: function (map) {
+        var container = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+        container.style.background = "#fff";
+        container.style.padding = "5px";
+        container.style.cursor = "pointer";
+        container.style.fontWeight = "bold";
+        container.style.textAlign = "center";
+        container.innerHTML = "Выбрать область (SHIFT + выделить)";
+
+        let active = false;
+        let rectangle;
+
+        container.onclick = function (e) {
+            L.DomEvent.stopPropagation(e);
+
+            if (active) {
+                active = false;
+                container.style.background = "#fff";
+                if (rectangle) {
+                    map.removeLayer(rectangle);
+                    rectangle = null;
+                }
+                return;
+            }
+
+            active = true;
+            container.style.background = "#28a745"; // green active
+
+            // Start drawing a rectangle
+            var startLatLng;
+
+            function onMouseDown(e) {
+                startLatLng = e.latlng;
+                rectangle = L.rectangle([startLatLng, startLatLng], {
+                    color: "#ff7800",
+                    weight: 1,
+                }).addTo(map);
+
+                map.on("mousemove", onMouseMove);
+                map.on("mouseup", onMouseUp);
+            }
+
+            function onMouseMove(e) {
+                if (!rectangle) return;
+                rectangle.setBounds(L.latLngBounds(startLatLng, e.latlng));
+            }
+
+            function onMouseUp(e) {
+                map.off("mousemove", onMouseMove);
+                map.off("mouseup", onMouseUp);
+
+                if (rectangle) {
+                    // Collect markers inside
+                    let bounds = rectangle.getBounds();
+                    let selectedIds = [];
+                    for (let id in markers) {
+                        if (bounds.contains(markers[id].getLatLng())) {
+                            selectedIds.push(id);
+                        }
+                    }
+
+                    if (selectedIds.length) {
+                        openSuburbPopup(rectangle.getCenter(), selectedIds);
+                    } else {
+                        alert("Жодної адреси не знайдено в області.");
+                    }
+
+                    // Reset control
+                    map.removeLayer(rectangle);
+                    rectangle = null;
+                    active = false;
+                    container.style.background = "#fff";
+                }
+            }
+
+            map.once("mousedown", onMouseDown);
+        };
+
+        return container;
+    },
+});
+let activeAddAdress = false;
+let addAddressButton = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+function handleClickOnPolygon(event) {
+    activeAddAdress = false;
+    for (var key in areaLayers) {
+        areaLayers[key].off("click", handleClickOnPolygon);
+    }
+    map.off("click", handleClickOnPolygon);
+    addAddressButton.style.backgroundColor = "#fff";
+    addAddressButton.style.color = "#000";
+    onMapClickAddAddress(event);
+}
+var addAddressControl = L.Control.extend({
+    options: { position: "topright" },
+    onAdd: function (map) {
+        container = addAddressButton;
+        container.style.background = "#fff";
+        container.style.padding = "5px";
+        container.style.cursor = "pointer";
+        container.style.fontWeight = "bold";
+        container.style.textAlign = "center";
+        container.innerHTML = "+ Добавить адресс";
+        activeAddAdress = false;
+        container.onclick = function (e) {
+            L.DomEvent.stopPropagation(e);
+            if (activeAddAdress) return;
+
+            activeAddAdress = true;
+            container.style.backgroundColor = "#28a745";
+            container.style.color = "#fff";
+            map.once("click", handleClickOnPolygon);
+            for (var key in areaLayers) {
+                areaLayers[key].once("click", handleClickOnPolygon); // register click on areas too
+            }
+        };
+        return container;
+    },
+});
+function loadAddressses() {
+    $.request("onLoadAddresses", {
+        success: function (data) {
+            if (data.addresses && data.addresses.length) {
+                var bounds = [];
+                data.addresses.forEach((addr) => {
+                    let color = "#fff";
+                    areas.forEach((el) => {
+                        if (ptinpoly(addr.lat, addr.lon, el.coords)) {
+                            color = el.color;
+                        }
+                    });
+                    if (!addr.lat || !addr.lon) return;
+                    let point = L.circleMarker([addr.lat, addr.lon], {
+                        radius: 5,
+                        fillColor: color,
+                        color: "blue",
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.7,
+                    }).addTo(layerGroup);
+                    let popupHtml = `
+    <div style="font-family: sans-serif; font-size: 14px; line-height: 1.4; min-width: 220px;">
+        <!-- Name UA -->
+        <label style="font-weight:bold; display:block; margin-bottom:2px;">Назва (UA)</label>
+        <input
+            type="text"
+            id="name-ua-${addr.Id}"
+            value="${addr.name_ua || ""}"
+            placeholder="Назва (UA)"
+            style="
+                width: 100%;
+                padding: 5px 8px;
+                margin-bottom:6px;
+                border-radius:4px;
+                border:1px solid #ccc;
+            "
+        >
+
+        <!-- Name RU -->
+        <label style="font-weight:bold; display:block; margin-bottom:2px;">Название (RU)</label>
+        <input
+            type="text"
+            id="name-ru-${addr.Id}"
+            value="${addr.name_ru || ""}"
+            placeholder="Название (RU)"
+            style="
+                width: 100%;
+                padding: 5px 8px;
+                margin-bottom:6px;
+                border-radius:4px;
+                border:1px solid #ccc;
+            "
+        >
+
+        <!-- Suburb UA -->
+        <label style="font-weight:bold; display:block; margin-bottom:2px;">Район (UA)</label>
+        <input
+            type="text"
+            id="suburb-ua-${addr.Id}"
+            value="${addr.suburb_ua || ""}"
+            placeholder="Район (UA)"
+            style="
+                width: 100%;
+                padding: 5px 8px;
+                margin-bottom:6px;
+                border-radius:4px;
+                border:1px solid #ccc;
+            "
+        >
+
+        <!-- Suburb RU -->
+        <label style="font-weight:bold; display:block; margin-bottom:2px;">Район (RU)</label>
+        <input
+            type="text"
+            id="suburb-ru-${addr.Id}"
+            value="${addr.suburb_ru || ""}"
+            placeholder="Район (RU)"
+            style="
+                width: 100%;
+                padding: 5px 8px;
+                margin-bottom:10px;
+                border-radius:4px;
+                border:1px solid #ccc;
+            "
+        >
+
+        <!-- Save button -->
+        <button
+            onclick="saveAddress(${addr.Id})"
+            class="btn btn-primary"
+        >
+            Зберегти
+        </button>
+        <button
+            onclick="deleteAddress(${addr.Id})"
+            class="btn btn-danger oc-icon-trash-o"
+        >
+            Видалити
+        </button>
+    </div>
+    `;
+
+                    point.bindPopup(popupHtml);
+
+                    markers[addr.Id] = point;
+                    bounds.push([addr.lat, addr.lon]);
+                });
+
+                if (bounds.length) {
+                    //map.fitBounds(bounds);
+                }
+            }
+        },
+    });
+}
+function loadAreas() {
+    $.request("onLoadAreas", {
+        success: function (data) {
+            areas = [];
+
+            data.areas.forEach((area) => {
+                areas.push(area);
+                area.color = area.color == "" ? null : area.color;
+                let polygon = L.polygon(area.coords, {
+                    color: area.color ?? "blue",
+                    areaId: area.id,
+                }).addTo(layerGroup);
+                polygon.bindPopup(`
+                        <div style="font-family:sans-serif; font-size:14px; min-width:200px;">
+                            <label style="font-weight:bold; display:block;">Название зоны</label>
+                            <input value=${
+                                area.name
+                            } type="text" id="new-area-name" placeholder="Название зоны" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Описание</label>
+                            <input value="${
+                                area.description ?? ""
+                            }" type="text" id="new-area-desc" placeholder="Описание зоны" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Цвет</label>
+                            <input value="${
+                                area.color ?? ""
+                            }" type="text" id="new-area-color" placeholder="Цвет" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <div class="form-floating">
+                                <select class="form-select" id="spotSelect-${
+                                    area.id
+                                }" aria-label="spot">
+                                    <option value="">Select a Spot</option>
+                                </select>
+                                <label for="spotSelect-${
+                                    area.id
+                                }">Id Ресторана</label>
+                            </div>
+
+                            <button
+                                onclick="updateArea(${area.id})"
+                                class="btn btn-success"
+                            >
+                                Сохранить
+                            </button>
+                            <button onclick="deleteArea(${
+                                area.id
+                            })" class="btn btn-danger">Удалить</button>
+                        </div>
+
+                `);
+                polygon.on("popupopen", function (e) {
+                    let selectId = `spotSelect-${area.id}`;
+                    let select = document.getElementById(selectId);
+
+                    if (!select) return;
+
+                    $.request("onLoadSpots", {
+                        success: function (data) {
+                            select.innerHTML =
+                                '<option value="">Выбрать точку</option>';
+
+                            data.spots.forEach((spot) => {
+                                let option = document.createElement("option");
+                                option.value = spot.id;
+                                option.textContent = spot.name;
+
+                                if (spot.id == area.spot_id) {
+                                    option.selected = true;
+                                }
+
+                                select.appendChild(option);
+                            });
+                        },
+                    });
+                });
+                // polygon.on("click", function (e) {
+                //     if (map._addAddressActive) {
+                //         map._addAddressActive = false;
+
+                //         // reset button visuals
+                //         document.querySelector(
+                //             ".leaflet-control"
+                //         ).style.backgroundColor = "#fff";
+                //         document.querySelector(
+                //             ".leaflet-control"
+                //         ).style.color = "#000";
+
+                //         onMapClickAddAddress(e); // same as map click
+                //     }
+                // });
+                areaLayers[area.id] = polygon;
+                drawnItems.addLayer(polygon);
+            });
+            loadAddressses();
+        },
+    });
+}
+function deleteArea(id) {
+    $.request("onDeleteArea", {
+        data: { id },
+        success: function () {
+            alert("Зона удалена");
+            layerGroup.clearLayers();
+            loadAreas();
+            //loadAddressses();
+        },
+    });
+}
+function deleteAddress(id) {
+    $.request("onDeleteAddress", {
+        data: { id },
+        success: function (data) {
+            alert("Адрес удален");
+            map.closePopup();
+            if (markers[id]) {
+                map.removeLayer(markers[id]);
+                delete markers[id];
+            }
+        },
+        error: function () {
+            alert("Failed to delete address");
+        },
+    });
+}
+function saveNewAddress(lat, lon) {
+    let name_ua = document.getElementById("new-name-ua").value;
+    let name_ru = document.getElementById("new-name-ru").value;
+    let suburb_ua = document.getElementById("new-suburb-ua").value;
+    let suburb_ru = document.getElementById("new-suburb-ru").value;
+
+    if (!name_ua || !name_ru || !suburb_ua || !suburb_ru) {
+        alert("Заполните все поля!");
+        return;
+    }
+
+    $.request("onAddAddress", {
+        data: { name_ua, name_ru, suburb_ua, suburb_ru, lat, lon },
+        success: function (data) {
+            alert("Адресс добавлен");
+
+            map.closePopup();
+
+            let id = data.id;
+            let point = L.circleMarker([lat, lon], {
+                radius: 5,
+                fillColor: "#007bff",
+                color: "#fff",
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.7,
+            }).addTo(layerGroup);
+            layerGroup.clearLayers();
+            loadAreas();
+            markers[id] = point;
+        },
+        error: function () {
+            alert("Failed to add address");
+        },
+    });
+}
+function onMapClickAddAddress(e) {
+    let lat = e.latlng.lat;
+    let lon = e.latlng.lng;
+
+    let popupHtml = `
+            <div style="font-family:sans-serif; font-size:14px; min-width:200px;">
+                <label style="font-weight:bold; display:block;">Назва (UA)</label>
+                <input type="text" id="new-name-ua" placeholder="Назва (UA)" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                <label style="font-weight:bold; display:block;">Назва (RU)</label>
+                <input type="text" id="new-name-ru" placeholder="Название (RU)" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                <label style="font-weight:bold; display:block;">Район (UA)</label>
+                <input type="text" id="new-suburb-ua" placeholder="Район (UA)" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                <label style="font-weight:bold; display:block;">Район (RU)</label>
+                <input type="text" id="new-suburb-ru" placeholder="Район (RU)" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                <button
+                    onclick="saveNewAddress(${lat}, ${lon})"
+                    class="btn btn-success"
+                >
+                    Додати
+                </button>
+            </div>
+        `;
+
+    L.popup().setLatLng(e.latlng).setContent(popupHtml).openOn(map);
+}
+function openSuburbPopup(latlng, selectedIds) {
+    let popupHtml = `
+            <div style="font-family:sans-serif; font-size:14px; min-width:220px;">
+                <label style="font-weight:bold; display:block; margin-bottom:2px;">Район (UA)</label>
+                <input
+                    type="text"
+                    id="bulk-suburb-ua"
+                    placeholder="Район (UA)"
+                    style="width:100%; padding:5px; margin-bottom:6px; border-radius:4px; border:1px solid #ccc;"
+                >
+                <label style="font-weight:bold; display:block; margin-bottom:2px;">Район (RU)</label>
+                <input
+                    type="text"
+                    id="bulk-suburb-ru"
+                    placeholder="Район (RU)"
+                    style="width:100%; padding:5px; margin-bottom:10px; border-radius:4px; border:1px solid #ccc;"
+                >
+                <button
+                    onclick='saveBulkSuburb(${selectedIds})'
+                    class="btn btn-primary"
+                    style="width:100%;"
+                >
+                    Оновити ${selectedIds.length} адрес
+                </button>
+            </div>
+        `;
+
+    L.popup().setLatLng(latlng).setContent(popupHtml).openOn(map);
+}
+function saveBulkSuburb(...ids) {
+    let suburb_ua = document.getElementById("bulk-suburb-ua").value;
+    let suburb_ru = document.getElementById("bulk-suburb-ru").value;
+
+    if (!suburb_ua || !suburb_ru) {
+        alert("Заповніть обидва поля!");
+        return;
+    }
+    $.request("onBulkUpdateSuburb", {
+        data: { ids: ids, suburb_ua: suburb_ua, suburb_ru: suburb_ru },
+        success: function () {
+            alert("Оновлено " + ids.length + " адреси.");
+            layerGroup.clearLayers();
+            loadAreas();
+            map.closePopup();
+        },
+    });
+}
+function saveAddress(id) {
+    let name_ua = document.getElementById(`name-ua-${id}`).value;
+    let name_ru = document.getElementById(`name-ru-${id}`).value;
+    let suburb_ua = document.getElementById(`suburb-ua-${id}`).value;
+    let suburb_ru = document.getElementById(`suburb-ru-${id}`).value;
+
+    $.request("onSaveAddress", {
+        data: { id, name_ua, name_ru, suburb_ua, suburb_ru },
+        success: function () {
+            alert("Збережено");
+            layerGroup.clearLayers();
+            loadAreas();
+        },
+    });
+}
+function updateArea(id) {
+    let name = document.getElementById("new-area-name").value;
+    let desc = document.getElementById("new-area-desc").value;
+    let color = document.getElementById("new-area-color").value;
+    let spot_id = document.getElementById(`spotSelect-${id}`).value;
+    $.request("onSaveArea", {
+        data: {
+            id,
+            name,
+            description: desc,
+            color,
+            ...(spot_id !== "" && { spot_id: spot_id }),
+        },
+        success: function () {
+            alert("Сохранено");
+            layerGroup.clearLayers();
+            loadAreas();
+        },
+    });
+}
+let map;
+var markers = {};
+var layerGroup = L.layerGroup();
+function focusOn(recordId) {
+    let marker = markers[recordId];
+    if (marker) {
+        map.setView(marker.getLatLng(), 13);
+        marker.openPopup();
+    }
+}
+// $(document)
+//     .on("render.addressmap", function () {
+$(document).on("render", function () {
+    const mapContainer = document.getElementById("address-map");
+    if(!mapContainer) return;
+    map = L.map("address-map", { layers: [layerGroup] }).setView(
+        [46.44685, 30.737],
+        9
+    );
+    map.addControl(new addAddressControl());
+    map.addControl(new selectAreaControl());
+    map.addLayer(drawnItems);
+
+    var drawControl = new L.Control.Draw({
+        draw: {
+            polygon: true,
+            marker: false,
+            polyline: false,
+            rectangle: false,
+            circle: false,
+            circlemarker: false,
+        },
+        edit: {
+            featureGroup: drawnItems,
+            remove: false,
+        },
+    });
+    map.addControl(drawControl);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+    }).addTo(map);
+    layerGroup.clearLayers();
+    loadAreas();
+
+    map.on(L.Draw.Event.CREATED, function (e) {
+        var layer = e.layer;
+        var coords = layer.getLatLngs()[0].map((ll) => [ll.lat, ll.lng]);
+        // Save via AJAX
+        $.request("onSaveArea", {
+            data: { name: "Новая зона", description: "", coords },
+            success: function (data) {
+                // layer.bindPopup("New Area (saved)<br>ID: " + data.id);
+                areaLayers[data.id] = layer;
+                // drawnItems.addLayer(layer);
+                layerGroup.clearLayers();
+                loadAreas();
+                //loadAddressses();
+            },
+        });
+    });
+    map.on(L.Draw.Event.EDITED, function (e) {
+        var layers = e.layers;
+
+        layers.eachLayer(function (layer) {
+            let id = layer.options.areaId;
+
+            // extract coordinates
+            let coords = layer.getLatLngs()[0].map((ll) => [ll.lat, ll.lng]);
+
+            // AJAX save
+            $.request("onSaveArea", {
+                data: {
+                    id: id,
+                    coords: coords,
+                },
+                success: function (data) {
+                    areaLayers[id] = layer;
+                    layerGroup.clearLayers();
+                    loadAreas();
+                },
+            });
+        });
+    });
+});
