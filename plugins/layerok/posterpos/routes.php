@@ -7,6 +7,7 @@ use Layerok\PosterPos\Controllers\Addresses;
 
 Route::post('/posterpos/webhook/handle', PosterWebhookController::class);
 Route::post('/wayforpay-service-url', WayForPayController::class);
+Route::post('/wayforpay-redirect', [WayForPayController::class, 'redirect']);
 
 Route::get('test', function () {
     return explode('.', request()->header('host'))[0];
