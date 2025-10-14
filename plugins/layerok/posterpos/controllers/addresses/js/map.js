@@ -322,6 +322,15 @@ function loadAreas() {
                             <input value="${
                                 area.color ?? ""
                             }" type="text" id="new-area-color" placeholder="Цвет" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Мин. стоимость для бесплатной доставки</label>
+                            <input value="${
+                                area.min_amount ?? ""
+                            }" type="text" id="new-area-min-amount" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Стоимость доставки</label>
+                            <input value="${
+                                area.delivery_price ?? ""
+                            }" type="text" id="new-area-delivery-price" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+
                             <div class="form-floating">
                                 <select class="form-select" id="spotSelect-${
                                     area.id
@@ -546,6 +555,8 @@ function updateArea(id) {
     let name = document.getElementById("new-area-name").value;
     let desc = document.getElementById("new-area-desc").value;
     let color = document.getElementById("new-area-color").value;
+    let min_amount = document.getElementById("new-area-min-amount").value;
+    let delivery_price = document.getElementById("new-area-delivery-price").value;
     let spot_id = document.getElementById(`spotSelect-${id}`).value;
     $.request("onSaveArea", {
         data: {
@@ -553,6 +564,8 @@ function updateArea(id) {
             name,
             description: desc,
             color,
+            min_amount,
+            delivery_price,
             ...(spot_id !== "" && { spot_id: spot_id }),
         },
         success: function () {
@@ -576,7 +589,7 @@ function focusOn(recordId) {
 //     .on("render.addressmap", function () {
 $(document).on("render", function () {
     const mapContainer = document.getElementById("address-map");
-    if(!mapContainer) return;
+    if (!mapContainer) return;
     map = L.map("address-map", { layers: [layerGroup] }).setView(
         [46.44685, 30.737],
         9

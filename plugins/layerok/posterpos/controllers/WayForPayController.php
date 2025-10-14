@@ -217,27 +217,6 @@ class WayForPayController
             } catch (\Exception $exception) {
             }
         }
-        // $api = new Api($spot->bot->token);
-        $telegramRes = null;
-        // try {
-        //     // В 1 хвилину 1 бот може надіслати не більше 20 повідомлень.
-        //     $telegramRes = $api->sendMessage([
-        //         'text' => OrderControllerV2::generateReceipt(
-        //             trans('layerok.restapi::lang.receipt.new_order') . ' #' . $poster_order_id,
-        //             ['items' => $order->products],
-        //             ShippingMethod::where('code', ShippingMethodCode::COURIER)->first(),
-        //             PaymentMethod::where('code', 'wayforpay')->first(),
-        //             $order
-        //         ),
-        //         'parse_mode' => "html",
-        //         'chat_id' => $spot->chat->internal_id
-        //     ]);
-        // } catch (\Exception $exception) {
-        //     try {
-        //         \Log::error($exception->getMessage());
-        //     } catch (\Exception $exception) {
-        //     }
-        // }
         return $poster_order_id;
     }
 }

@@ -12,6 +12,8 @@ class Area extends Model
         'description',
         'coords',
         'color',
+        'min_amount',
+        'delivery_price',
         'spot_id',
     ];
 

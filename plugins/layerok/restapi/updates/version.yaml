@@ -11,9 +11,9 @@
 1.0.8:
     - 'Seed addresses table'
     - seed_addresses.php
-1.0.11:
+1.0.14:
     - 'Add areas table'
     - add_areas_table.php
-1.0.13:
+1.0.15:
     - 'Add online_orders table'
     - add_online_orders_table.php
