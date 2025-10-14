@@ -1,0 +1,13 @@
+list: $/layerok/posterpos/models/address/columns.yaml
+modelClass: Layerok\posterpos\Models\Address
+title: Manage Addresses
+recordUrl: 'layerok/posterpos/addresses/update/:id'
+noRecordsMessage: 'backend::lang.list.no_records'
+recordsPerPage: 5
+# showCheckboxes: true
+toolbar:
+    # Partial for toolbar buttons
+
+    # Search widget configuration
+    search:
+        prompt: backend::lang.list.search_prompt

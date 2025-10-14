@@ -1,0 +1,10 @@
+<button
+    class="btn <?= \Layerok\PosterPos\Models\AddressSettings::get('enable_address_system') ? 'btn-danger' : 'btn-success' ?>"
+    data-request="onToggleAddressSystem"
+    data-request-success="window.location.reload();"
+    data-stripe-load-indicator
+>
+    <?= \Layerok\PosterPos\Models\AddressSettings::get('enable_address_system')
+        ? 'Выключить систему адресов'
+        : 'Включить систему адресов' ?>
+</button>

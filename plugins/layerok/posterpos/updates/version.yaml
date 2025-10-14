@@ -120,3 +120,7 @@
 1.1.40:
     - 'Fix spot district relation fields'
     - fix_spot_district_relation_fields.php
+
+1.1.41:
+    - 'Add merchant info to spots table'
+    - add_merchant_info_to_spots_table.php

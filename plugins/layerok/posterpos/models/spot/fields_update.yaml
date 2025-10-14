@@ -29,6 +29,15 @@ fields:
         label: City
         type: relation
         span: auto
+    merchant_account:
+        label: Merchant account
+        span: auto
+    merchant_secret_key:
+        label: Merchant secret key
+        span: auto
+    domain_name:
+        label: Domain name
+        span: auto
     address:
         label: Address
         span: auto

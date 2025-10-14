@@ -5,3 +5,15 @@
 1.0.3:
     - 'Add pending bonuses table'
     - add_pending_bonuses_table.php
+1.0.7:
+    - 'Add addressed table'
+    - add_addresses_table.php
+1.0.8:
+    - 'Seed addresses table'
+    - seed_addresses.php
+1.0.14:
+    - 'Add areas table'
+    - add_areas_table.php
+1.0.15:
+    - 'Add online_orders table'
+    - add_online_orders_table.php

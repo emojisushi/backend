@@ -38,7 +38,10 @@ class Spot extends Model
         'slug',
         'poster_id',
         'city_id',
-        'poster_account_id'
+        'poster_account_id',
+        'merchant_account',
+        'merchant_secret_key',
+        'domain_name',
     ];
 
     public $slugs = [
@@ -79,7 +82,8 @@ class Spot extends Model
     ];
 
     public $hasMany = [
-        'districts' => District::class
+        'districts' => District::class,
+        'areas' => \Layerok\PosterPos\Models\Area::class,
     ];
 
     public function afterDelete() {

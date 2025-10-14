@@ -1,0 +1,5 @@
+fields:
+    enable_address_system:
+        label: Включить систему адресов
+        type: switch
+        default: true

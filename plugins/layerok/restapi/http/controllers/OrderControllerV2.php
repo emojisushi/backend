@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Validator;
 use Layerok\Basecode\Classes\Receipt;
+use Layerok\PosterPos\Classes\OnlineOrderStatus;
 use Layerok\PosterPos\Classes\ServiceMode;
 use Layerok\PosterPos\Classes\ShippingMethodCode;
 use Layerok\PosterPos\Models\Spot;
@@ -24,6 +25,17 @@ use OFFLINE\Mall\Models\Product;
 use poster\src\PosterApi;
 use Telegram\Bot\Api;
 use Layerok\RestApi\Models\Settings;
+use Layerok\PosterPos\Models\Address;
+use Layerok\PosterPos\Models\AddressSettings;
+use Layerok\PosterPos\Models\Area;
+use Layerok\PosterPos\Models\OnlineOrder;
+use WayForPay\SDK\Domain\Product as WayForPayProduct;
+use WayForPay\SDK\Wizard\PurchaseWizard;
+use Maksa988\WayForPay\Collection\ProductCollection;
+use Maksa988\WayForPay\Domain\Client;
+use Maksa988\WayForPay\Facades\WayForPay;
+use Layerok\PosterPos\Models\WayforpaySettings;
+use WayForPay\SDK\Credential\AccountSecretCredential;
 
 class OrderControllerV2 extends Controller
 {
@@ -55,15 +67,49 @@ class OrderControllerV2 extends Controller
          */
         $spot = Spot::find($data['spot_id']);
 
+        $shippingMethod = ShippingMethod::where('id', $data['shipping_method_id'])->first();
+        $address = null;
+        $mode = ServiceMode::ON_SITE;
+        $area = null;
+        if ($shippingMethod->code === ShippingMethodCode::COURIER) {
+            $spotId = null;
+            $mode = ServiceMode::COURIER;
+            if (AddressSettings::get('enable_address_system')) {
+                $address = Address::find($data['address']);
+                $areas = Area::all();
+                foreach ($areas as $lArea) {
+                    if (
+                        $this->pointInPolygon(
+                            $address->lat,
+                            $address->lon,
+                            $lArea['coords']
+                        )
+                    ) {
+                        $area = $lArea;
+                        $spotId = $lArea['spot_id'];
+                        break;
+                    }
+                }
+                $spot = Spot::find($spotId);
+                // $incomingOrder['spot_id'] = $spot->tablet->tablet_id;
+                $address = $address->name_ua . ', ' . $address->suburb_ua . ', ' . $data['address_details'] ?? null;
+                $data['address'] = $address;
+            } else {
+                $address = $data['address'] ?? null;
+            }
+        }
+
         if ($spot->temporarily_unavailable && !($user && $user->isCallCenterAdmin())) {
             // admins are allowed to bypass this check
             throw new \ValidationException([trans('layerok.restapi::validation.temporarily_unavailable')]);
         }
-
         $poster_account = $spot->tablet->poster_account;
 
-        $shippingMethod = ShippingMethod::where('id', $data['shipping_method_id'])->first();
         $paymentMethod = PaymentMethod::where('id', $data['payment_method_id'])->first();
+
+        if ($paymentMethod->code === 'wayforpay' && $shippingMethod->code !== ShippingMethodCode::COURIER) {
+            throw new \ValidationException(['error' => 'Online payment is available only for a courier']);
+        }
 
         $products = Product::with([
             'poster_accounts'
@@ -89,7 +135,6 @@ class OrderControllerV2 extends Controller
                 'count' => $cartProduct['quantity'],
                 'product_id' => $product_poster_account->pivot->poster_id
             ];
-
         });
 
         if (intval($data['sticks']) > 0) {
@@ -139,17 +184,21 @@ class OrderControllerV2 extends Controller
             'products' => $posterProducts,
             'first_name' => $data['firstname'] ?? null,
             'last_name' => $data['lastname'] ?? null,
-            'service_mode' => ServiceMode::ON_SITE,
+            'service_mode' => $mode,
+            'address' => $address,
         ];
 
+        $courier_fee = null;
         if ($shippingMethod->code === ShippingMethodCode::COURIER) {
-            $incomingOrder['service_mode'] = ServiceMode::COURIER;
-            $incomingOrder['address'] = $data['address'] ?? null;
+            if ($total / 100 < $area->min_amount) {
+                $courier_fee = $area->delivery_price;
+            }
         }
 
         if ($shippingMethod->code === ShippingMethodCode::TAKEAWAY) {
             $incomingOrder['service_mode'] = ServiceMode::TAKEAWAY;
         }
+
         if ($user) {
             $usedBonus = 0;
             if (isset($data['bonuses_to_use'])) {
@@ -165,6 +214,114 @@ class OrderControllerV2 extends Controller
             if ($usedBonus > $total / 100 * $max) {
                 return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [trans("layerok.restapi::validation.bonus_limit", ['max' => $max])]]], 400);
             }
+        }
+        if ($paymentMethod->code === 'wayforpay') {
+            $incomingOrderTest = $incomingOrder;
+            $incomingOrderTest['products'] = null;
+            $posterTest = (object) PosterApi::incomingOrders()
+                ->createIncomingOrder($incomingOrderTest);
+            if (isset($posterTest->error)) {
+                $key = 'layerok.restapi::lang.poster.errors.' . $posterTest->error;
+                if (\Lang::has($key)) {
+                    $err_text = trans(
+                        'layerok.restapi::lang.poster.errors.' . $posterTest->error
+                    );
+                } else {
+                    $err_text =
+                        $posterTest->message;
+                }
+                if ($err_text !== 'products is empty') {
+                    throw new ValidationException([
+                        $posterTest->error => $err_text
+                    ]);
+                }
+            }
+
+            $order = $this->createOnlineOrder($incomingOrder, $total, $cart);
+            $order_id = $order->id;
+            $wayforpay_id = $order_id . '-' . time();
+            $order->online_payment_id = $wayforpay_id;
+            $order->save();
+
+            $client = new Client(
+                optional($data)['first_name'],
+                optional($data)['last_name'],
+                optional($data)['email'],
+                optional($data)['phone']
+            );
+
+            $way_total = $total / 100;
+
+            $merchantAccount = $spot->merchant_account ?? null;
+            $merchantSecretKey = $spot->merchant_secret_key ?? null;
+            $domainName = $spot->domain_name ?? null;
+
+            if (!$merchantAccount || !$merchantSecretKey) {
+                throw new \Exception("WayForPay credentials missing for this spot");
+            }
+            $credential = new AccountSecretCredential($merchantAccount, $merchantSecretKey);
+            $products = [
+                new WayForPayProduct(
+                    'Замовлення: #' . $order_id,
+                    $way_total,
+                    1
+                )
+            ];
+            if ($courier_fee != null) {
+                $products[] = new WayForPayProduct(
+                    'Курьер',
+                    $courier_fee,
+                    1
+                );
+            }
+            $form = PurchaseWizard::get($credential)
+                ->setOrderReference($wayforpay_id)
+                ->setAmount($way_total)
+                ->setCurrency(WayforpaySettings::get('currency'))
+                ->setOrderDate(new \DateTime())
+                ->setMerchantDomainName($domainName)
+                ->setClient($client)
+                ->setProducts(new ProductCollection($products))
+                ->setReturnUrl($spot->city->thankyou_page_url . "?order_id=$order_id")
+                ->setServiceUrl(WayforpaySettings::get('service_url') . "?spot_id=$spot->id")
+                ->setLanguage(WayforpaySettings::get('language'))
+                ->setOrderLifetime(120)
+                ->setOrderTimeout(120)
+                ->getForm()
+                ->getAsString();
+            // $form = WayForPay::purchase(
+            //     $wayforpay_id,
+            //     // $poster_order_id,
+            //     $way_total,
+            //     $client,
+            //     // $way_products,
+            //     new ProductCollection([
+            //         new WayForPayProduct(
+            //             'Замовлення: #' . $order_id,
+            //             $way_total,
+            //             1
+            //         ),
+            //     ]),
+            //     WayforpaySettings::get('currency'),
+            //     null,
+            //     WayforpaySettings::get('language'),
+            //     null,
+            //     $spot->city->thankyou_page_url . "?order_id=$order_id",
+            //     WayforpaySettings::get('service_url') . "?spot_id=$spot->id",
+            //     null,
+            //     null,
+            //     null,
+            //     60,
+            //     120,
+
+            // )->getAsString(); // Get html form as string
+
+            // $cart->delete();
+            return response()->json([
+                'success' => true,
+                'form' => $form,
+                'poster_order' => $order_id
+            ]);
         }
         // todo: create DTO for the poster order
         $posterResult = (object) PosterApi::incomingOrders()
@@ -208,7 +365,6 @@ class OrderControllerV2 extends Controller
                 try {
                     \Log::error($exception->getMessage());
                 } catch (\Exception $exception) {
-
                 }
             }
 
@@ -232,7 +388,6 @@ class OrderControllerV2 extends Controller
             ]);
         }
 
-        $api = new Api($spot->bot->token);
 
         $poster_order_id = $posterResult->response->incoming_order_id + $add_to_poster_id;
 
@@ -243,7 +398,7 @@ class OrderControllerV2 extends Controller
             }
             $bonusRate = Settings::get('bonus_rate');
             $dif = 0;
-            if (!(bool)Settings::get('get_bonus_from_used_bonus')) {
+            if (!(bool) Settings::get('get_bonus_from_used_bonus')) {
                 $dif = $usedBonus; // отнимаем бонусы от стоимости заказа
             }
             PendingBonus::create([
@@ -257,9 +412,11 @@ class OrderControllerV2 extends Controller
             $user->save();
         }
 
+        $api = new Api($spot->bot->token);
+        $telegramRes = null;
         try {
             // В 1 хвилину 1 бот може надіслати не більше 20 повідомлень.
-            $api->sendMessage([
+            $telegramRes = $api->sendMessage([
                 'text' => $this->generateReceipt(
                     trans('layerok.restapi::lang.receipt.new_order') . ' #' . $poster_order_id,
                     $cart,
@@ -274,10 +431,8 @@ class OrderControllerV2 extends Controller
             try {
                 \Log::error($exception->getMessage());
             } catch (\Exception $exception) {
-
             }
         }
-
         return response()->json([
             'success' => true,
             'poster_order' => $posterResult->response
@@ -325,7 +480,7 @@ class OrderControllerV2 extends Controller
         }
     }
 
-    public function generateReceipt(
+    public static function generateReceipt(
         string $headline,
         $cart,
         ShippingMethod $shippingMethod,
@@ -421,5 +576,79 @@ class OrderControllerV2 extends Controller
     public function getSticksPosterId()
     {
         return Config::get('layerok.restapi::order.sushi_sticks_poster_id');
+    }
+
+    private function pointInPolygon($x, $y, $poly)
+    {
+        $c = false;
+        $l = count($poly);
+
+        for ($i = 0, $j = $l - 1; $i < $l; $j = $i++) {
+            $xj = $poly[$j][0];
+            $yj = $poly[$j][1];
+            $xi = $poly[$i][0];
+            $yi = $poly[$i][1];
+
+            $where = ($yi - $yj) * ($x - $xi) - ($xi - $xj) * ($y - $yi);
+
+            if ($yj < $yi) {
+                if ($y >= $yj && $y < $yi) {
+                    if ($where == 0)
+                        return true; // point on the line
+                    if ($where > 0) {
+                        if ($y == $yj) {
+                            // ray intersects vertex
+                            $prevIndex = ($j == 0) ? $l - 1 : $j - 1;
+                            if ($y > $poly[$prevIndex][1]) {
+                                $c = !$c;
+                            }
+                        } else {
+                            $c = !$c;
+                        }
+                    }
+                }
+            } elseif ($yi < $yj) {
+                if ($y > $yi && $y <= $yj) {
+                    if ($where == 0)
+                        return true; // point on the line
+                    if ($where < 0) {
+                        if ($y == $yj) {
+                            // ray intersects vertex
+                            $prevIndex = ($j == 0) ? $l - 1 : $j - 1;
+                            if ($y < $poly[$prevIndex][1]) {
+                                $c = !$c;
+                            }
+                        } else {
+                            $c = !$c;
+                        }
+                    }
+                }
+            } elseif ($y == $yi && (($x >= $xj && $x <= $xi) || ($x >= $xi && $x <= $xj))) {
+                return true; // point on horizontal edge
+            }
+        }
+
+        return $c;
+    }
+    private function createOnlineOrder($data, $total, $cart)
+    {
+        $order = [
+            'status'            => OnlineOrderStatus::WAITING,
+            'online_payment_id' => $data['online_payment_id'] ?? null,
+            'poster_id'         => null,
+            'products'          => json_encode($data['products']),
+            'phone'             => $data['phone'],
+            'comment'           => $data['comment'],
+            'first_name'        => $data['first_name'],
+            'last_name'         => $data['last_name'],
+            'address'           => $data['address'],
+            'service_mode'      => $data['service_mode'],
+            'spot_id'           => $data['spot_id'],
+            'total'             => $total,
+            'cart'              => json_encode($cart)
+        ];
+
+        // Create and return the order
+        return OnlineOrder::create($order);
     }
 }

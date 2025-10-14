@@ -2,6 +2,12 @@ fields:
     service_url:
         label: Service url
         span: auto
+    thankyou_url:
+        label: Thankyou url
+        span: auto
+    status_url:
+        label: Status url
+        span: auto
     currency:
         label: Currency
         span: auto

@@ -1,0 +1,14 @@
+name: Address
+form: $/layerok/posterpos/models/address/fields.yaml
+modelClass: Layerok\posterpos\Models\Address
+defaultRedirect: layerok/posterpos/addresses
+
+create:
+    title: Create Address
+    redirect: layerok/posterpos/addresses/update/:id
+    redirectClose: layerok/posterpos/addresses
+
+update:
+    title: Edit Address
+    redirect: layerok/posterpos/addresses
+    redirectClose: layerok/posterpos/addresses
