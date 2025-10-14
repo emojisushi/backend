@@ -179,6 +179,12 @@ class Addresses extends Controller
         if (post('color') !== null) {
             $data['color'] = post('color');
         }
+        if (post('min_amount') !== null) {
+            $data['min_amount'] = post('min_amount');
+        }
+        if (post('delivery_price') !== null) {
+            $data['delivery_price'] = post('delivery_price');
+        }
         if ($id) {
             $area = \Layerok\PosterPos\Models\Area::find($id);
             if ($area) {
@@ -245,6 +251,8 @@ class Addresses extends Controller
                 return [
                     'coords' => is_string($area->coords) ? json_decode($area->coords, true) : $area->coords,
                     'spot_id' => $area->spot_id,
+                    'min_amount' => $area->min_amount,
+                    'delivery_price' => $area->delivery_price,
                 ];
             });
 
@@ -261,9 +269,12 @@ class Addresses extends Controller
         $result = $addresses->map(function ($address) use ($areas, $spotMap) {
             $spotId = null;
             $spotName = null;
-
+            $min_amount = null;
+            $delivery_price = null;
             foreach ($areas as $area) {
                 if ($this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
+                    $min_amount = $area['min_amount'];
+                    $delivery_price = $area['delivery_price'];
                     $spotId = $area['spot_id'];
                     $spotName = $spotMap[$spotId] ?? null;
                     break;
@@ -281,6 +292,8 @@ class Addresses extends Controller
                 'suburb_ua' => $address->suburb_ua,
                 'suburb_ru' => $address->suburb_ru,
                 'spot_name' => $spotName,
+                'min_amount' => $min_amount,
+                'delivery_price' => $delivery_price,
             ];
         })->filter();
 

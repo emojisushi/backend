@@ -17,6 +17,8 @@ class AddAreasTable extends Migration
             $table->string('name');
             $table->string('description')->nullable();
             $table->string('color')->nullable();
+            $table->integer('min_amount')->nullable();
+            $table->integer('delivery_price')->nullable();
             $table->json('coords');
             $table->timestamps();
 

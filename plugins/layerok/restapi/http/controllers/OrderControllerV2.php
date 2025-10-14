@@ -70,21 +70,23 @@ class OrderControllerV2 extends Controller
         $shippingMethod = ShippingMethod::where('id', $data['shipping_method_id'])->first();
         $address = null;
         $mode = ServiceMode::ON_SITE;
+        $area = null;
         if ($shippingMethod->code === ShippingMethodCode::COURIER) {
             $spotId = null;
             $mode = ServiceMode::COURIER;
             if (AddressSettings::get('enable_address_system')) {
                 $address = Address::find($data['address']);
                 $areas = Area::all();
-                foreach ($areas as $area) {
+                foreach ($areas as $lArea) {
                     if (
                         $this->pointInPolygon(
                             $address->lat,
                             $address->lon,
-                            $area['coords']
+                            $lArea['coords']
                         )
                     ) {
-                        $spotId = $area['spot_id'];
+                        $area = $lArea;
+                        $spotId = $lArea['spot_id'];
                         break;
                     }
                 }
@@ -186,7 +188,12 @@ class OrderControllerV2 extends Controller
             'address' => $address,
         ];
 
-
+        $courier_fee = null;
+        if ($shippingMethod->code === ShippingMethodCode::COURIER) {
+            if ($total / 100 < $area->min_amount) {
+                $courier_fee = $area->delivery_price;
+            }
+        }
 
         if ($shippingMethod->code === ShippingMethodCode::TAKEAWAY) {
             $incomingOrder['service_mode'] = ServiceMode::TAKEAWAY;
@@ -253,6 +260,20 @@ class OrderControllerV2 extends Controller
                 throw new \Exception("WayForPay credentials missing for this spot");
             }
             $credential = new AccountSecretCredential($merchantAccount, $merchantSecretKey);
+            $products = [
+                new WayForPayProduct(
+                    'Замовлення: #' . $order_id,
+                    $way_total,
+                    1
+                )
+            ];
+            if ($courier_fee != null) {
+                $products[] = new WayForPayProduct(
+                    'Курьер',
+                    $courier_fee,
+                    1
+                );
+            }
             $form = PurchaseWizard::get($credential)
                 ->setOrderReference($wayforpay_id)
                 ->setAmount($way_total)
@@ -260,11 +281,7 @@ class OrderControllerV2 extends Controller
                 ->setOrderDate(new \DateTime())
                 ->setMerchantDomainName($domainName)
                 ->setClient($client)
-                ->setProducts(new ProductCollection([new WayForPayProduct(
-                    'Замовлення: #' . $order_id,
-                    $way_total,
-                    1
-                )]))
+                ->setProducts(new ProductCollection($products))
                 ->setReturnUrl($spot->city->thankyou_page_url . "?order_id=$order_id")
                 ->setServiceUrl(WayforpaySettings::get('service_url') . "?spot_id=$spot->id")
                 ->setLanguage(WayforpaySettings::get('language'))
