@@ -52,6 +52,8 @@ class OrderControllerV2 extends Controller
 
         $rainlablUser = $jwtGuard->user();
 
+        $isAddressSystem = AddressSettings::get('enable_address_system');
+
         $cart = request('cart');
 
         if (!$cart || (is_array($cart) && count($cart) < 1)) {
@@ -74,7 +76,7 @@ class OrderControllerV2 extends Controller
         if ($shippingMethod->code === ShippingMethodCode::COURIER) {
             $spotId = null;
             $mode = ServiceMode::COURIER;
-            if (AddressSettings::get('enable_address_system')) {
+            if ($isAddressSystem) {
                 $address = Address::find($data['address']);
                 $areas = Area::all();
                 foreach ($areas as $lArea) {
@@ -189,7 +191,7 @@ class OrderControllerV2 extends Controller
         ];
 
         $courier_fee = null;
-        if ($shippingMethod->code === ShippingMethodCode::COURIER) {
+        if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
             if ($total / 100 < $area->min_amount) {
                 $courier_fee = $area->delivery_price;
             }
@@ -237,7 +239,7 @@ class OrderControllerV2 extends Controller
                 }
             }
 
-            $order = $this->createOnlineOrder($incomingOrder, $total, $cart);
+            $order = $this->createOnlineOrder($incomingOrder, $total, $cart, $spot->id);
             $order_id = $order->id;
             $wayforpay_id = $order_id . '-' . time();
             $order->online_payment_id = $wayforpay_id;
@@ -276,17 +278,17 @@ class OrderControllerV2 extends Controller
             }
             $form = PurchaseWizard::get($credential)
                 ->setOrderReference($wayforpay_id)
-                ->setAmount($way_total)
+                ->setAmount($way_total + $courier_fee)
                 ->setCurrency(WayforpaySettings::get('currency'))
                 ->setOrderDate(new \DateTime())
                 ->setMerchantDomainName($domainName)
                 ->setClient($client)
                 ->setProducts(new ProductCollection($products))
-                ->setReturnUrl($spot->city->thankyou_page_url . "?order_id=$order_id")
+                ->setReturnUrl(WayforpaySettings::get('return_url') . "?order_id=$order_id")
                 ->setServiceUrl(WayforpaySettings::get('service_url') . "?spot_id=$spot->id")
                 ->setLanguage(WayforpaySettings::get('language'))
-                ->setOrderLifetime(120)
-                ->setOrderTimeout(120)
+                ->setOrderLifetime(600)
+                ->setOrderTimeout(600)
                 ->getForm()
                 ->getAsString();
             // $form = WayForPay::purchase(
@@ -630,7 +632,7 @@ class OrderControllerV2 extends Controller
 
         return $c;
     }
-    private function createOnlineOrder($data, $total, $cart)
+    private function createOnlineOrder($data, $total, $cart, $real_spot_id)
     {
         $order = [
             'status'            => OnlineOrderStatus::WAITING,
@@ -645,7 +647,8 @@ class OrderControllerV2 extends Controller
             'service_mode'      => $data['service_mode'],
             'spot_id'           => $data['spot_id'],
             'total'             => $total,
-            'cart'              => json_encode($cart)
+            'cart'              => json_encode($cart),
+            'real_spot_id'      => $real_spot_id
         ];
 
         // Create and return the order

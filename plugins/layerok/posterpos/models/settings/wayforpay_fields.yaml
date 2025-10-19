@@ -2,8 +2,8 @@ fields:
     service_url:
         label: Service url
         span: auto
-    thankyou_url:
-        label: Thankyou url
+    return_url:
+        label: Return client post url 
         span: auto
     status_url:
         label: Status url

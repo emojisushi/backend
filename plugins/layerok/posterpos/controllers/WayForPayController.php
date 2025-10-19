@@ -67,13 +67,16 @@ class WayForPayController
 
         if ($transaction->isStatusApproved()) {
             $order = OnlineOrder::where('online_payment_id', $transaction->getOrderReference())->first();
+            
             $order->status = OnlineOrderStatus::PAID;
             $order->save();
-
-            $poster_id = $this->sendPosterOrder($transaction->getOrderReference());
+            
+            $poster_id = $this->sendPosterOrder($spot->id, $transaction->getOrderReference());
             $order->poster_id = $poster_id;
 
             $order->save();
+
+
             $message = sprintf(
                 "✅ Успішний платіж на сайті https://emojisushi.com.ua \n\nСума: %s %s \nНомер замовлення: %s",
                 $transaction->getAmount(),
@@ -144,29 +147,29 @@ class WayForPayController
     {
         $data = post();
 
-        $status = $data['transactionStatus'] ?? null;
+        // $status = $data['transactionStatus'] ?? null;
 
-        if ($status === 'Approved') {
-            // $order = \OFFLINE\Mall\Models\Order::where('order_number', $data['orderReference'])->first();
-            // if ($order) {
-            //     $order->markAsPaid();
-            // }
-            return Redirect::to(WayforpaySettings::get('thankyou_url') . '?location_confirmed=true&order_id=' . $data['orderReference']);
-        }
-        if ($status === 'Pending') { //Pending
-            // $order = \OFFLINE\Mall\Models\Order::where('order_number', $data['orderReference'])->first();
-            // if ($order) {
-            //     $order->markAsPaid();
-            // }
-            // return Redirect::to(WayforpaySettings::get('thankyou_url') . '?location_confirmed=true&order_id=' . $data['orderReference']);
-        }
+        // if ($status === 'Approved') {
+        //     // $order = \OFFLINE\Mall\Models\Order::where('order_number', $data['orderReference'])->first();
+        //     // if ($order) {
+        //     //     $order->markAsPaid();
+        //     // }
+        //     return Redirect::to(WayforpaySettings::get('thankyou_url') . '?location_confirmed=true&order_id=' . $data['orderReference']);
+        // }
+        // if ($status === 'Pending') { //Pending
+        //     // $order = \OFFLINE\Mall\Models\Order::where('order_number', $data['orderReference'])->first();
+        //     // if ($order) {
+        //     //     $order->markAsPaid();
+        //     // }
+        //     // return Redirect::to(WayforpaySettings::get('thankyou_url') . '?location_confirmed=true&order_id=' . $data['orderReference']);
+        // }
         return Redirect::to(WayforpaySettings::get('status_url') . '?location_confirmed=true&order_id=' . $data['orderReference']);
     }
-    public function sendPosterOrder($order_id)
+    public function sendPosterOrder($real_spot_id, $order_id)
     {
 
         $order = OnlineOrder::where('online_payment_id', $order_id)->first();
-        $spot = Spot::findBySlugOrId($order->spot_id);
+        $spot = Spot::findBySlugOrId($real_spot_id);
         $poster_account = $spot->tablet->poster_account;
 
         PosterApi::init([
@@ -193,7 +196,7 @@ class WayForPayController
             ->createIncomingOrder($incomingOrder);
 
         $poster_order_id = $posterResult->response->incoming_order_id ?? null;
-        
+
         $order->poster_id = $poster_order_id;
 
 
@@ -218,5 +221,16 @@ class WayForPayController
             }
         }
         return $poster_order_id;
+    }
+
+    public function getOrderStatus()
+    {
+        $order_id = input('order_id');
+        $order = OnlineOrder::where('online_payment_id', $order_id)->first();
+        if ($order == null) {
+            return response()->json(null, 404);
+        }
+        $data = $order->only(['status', 'online_payment_id', 'poster_id']);
+        return response()->json($data);
     }
 }

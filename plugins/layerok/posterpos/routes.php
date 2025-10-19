@@ -16,4 +16,6 @@ Route::get('test', function () {
 Route::prefix('api')->group(function () {
     Route::get('address/options', [Addresses::class, 'options']);
     Route::get('addresses', [Addresses::class, 'addresses']);
+
+    Route::get('order/status', [WayForPayController::class, 'getOrderStatus']);
 });
