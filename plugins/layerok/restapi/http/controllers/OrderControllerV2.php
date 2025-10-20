@@ -194,6 +194,9 @@ class OrderControllerV2 extends Controller
         if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
             if ($total / 100 < $area->min_amount) {
                 $courier_fee = $area->delivery_price;
+                $data['delivery_price'] = $courier_fee . " ₴";
+            } else {
+                $data['delivery_price'] = 0 . " ₴";
             }
         }
 
@@ -549,6 +552,10 @@ class OrderControllerV2 extends Controller
             ->field(
                 trans('layerok.restapi::lang.receipt.comment'),
                 htmlspecialchars($data['comment'] ?? null)
+            )
+            ->field(
+                trans('layerok.restapi::lang.receipt.delivery_price'),
+                htmlspecialchars($data['delivery_price'] ?? null)
             )
             ->newLine()
             ->b(trans('layerok.restapi::lang.receipt.order_items'))

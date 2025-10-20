@@ -25,6 +25,7 @@ return [
         'order_items' => 'Товары в заказе',
         'delivery_method' => 'Способ доставки',
         'payment_method' => 'Способ оплаты',
+        'delivery_price' => 'Стоимость доставки',
         'sticks_name' => 'Палочки для суши',
         'target' => 'Источник заказа',
         'persons_amount' => 'Количество персон',
