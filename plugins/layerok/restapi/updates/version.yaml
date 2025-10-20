@@ -17,3 +17,6 @@
 1.0.15:
     - 'Add online_orders table'
     - add_online_orders_table.php
+1.0.16:
+    - 'Remove foreign key spot id'
+    - remove_foreign_key_spot_id.php
