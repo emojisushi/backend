@@ -67,7 +67,7 @@ class Addresses extends Controller
     {
         $this->addJs('https://unpkg.com/leaflet/dist/leaflet.js');
         $this->addJs('https://unpkg.com/leaflet-draw/dist/leaflet.draw.js');
-        $this->addJs('/plugins/layerok/posterpos/controllers/addresses/assets/js/map.js', ['defer' => true]);
+        $this->addJs('/plugins/layerok/posterpos/assets/js/map.js', ['defer' => true]);
         $this->addCss('https://unpkg.com/leaflet/dist/leaflet.css');
         $this->addCss('https://unpkg.com/leaflet-draw/dist/leaflet.draw.css');
 
