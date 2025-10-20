@@ -20,7 +20,7 @@ class CheckoutController extends Controller
     }
 
     public function getPaymentMethods(): array {
-        $records = PaymentMethod::all();
+        $records = PaymentMethod::where('is_enabled', 1)->get();
 
         return $records->toArray();
     }
