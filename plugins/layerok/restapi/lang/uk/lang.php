@@ -24,6 +24,7 @@ return [
         'spot' => 'Заклад',
         'order_items' => 'Замовлені товари',
         'delivery_method' => 'Спосіб доставки',
+        'delivery_price' => 'Вартість доставки',
         'payment_method' => 'Спосіб оплаты',
         'sticks_name' => 'Палички для суші',
         'target' => 'Джерело замовлення',

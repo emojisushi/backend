@@ -7,6 +7,7 @@ use Backend\Classes\Controller;
 use Illuminate\Http\JsonResponse;
 use Layerok\PosterPos\Models\AddressSettings;
 use Layerok\PosterPos\Models\Spot;
+use ApplicationException;
 
 /**
  * Cities Backend Controller
@@ -245,7 +246,11 @@ class Addresses extends Controller
         $spots = \Layerok\PosterPos\Models\Spot::where('city_id', $city->id)->get();
         $spotMap = $spots->pluck('name', 'id')->toArray();
 
-        $areas = \Layerok\PosterPos\Models\Area::whereIn('spot_id', $spots->pluck('id'))
+        $availableSpotIds = $spots
+            ->where('temporarily_unavailable', false)
+            ->pluck('id');
+
+        $areas = \Layerok\PosterPos\Models\Area::whereIn('spot_id', $availableSpotIds)
             ->get()
             ->map(function ($area) {
                 return [
