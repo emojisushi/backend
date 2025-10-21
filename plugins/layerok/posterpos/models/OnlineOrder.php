@@ -21,6 +21,7 @@ class OnlineOrder extends Model
         'service_mode',
         'address',
         'spot_id',
+        'delivery_price',
     ];
 
 }
