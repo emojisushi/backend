@@ -27,7 +27,8 @@ class CatalogController extends Controller
         ]);
     }
 
-    public function getBanners (): array  {
+    public function getBanners(): array
+    {
         $banners = Banner::with([
             'image',
             'image_small',
@@ -38,9 +39,10 @@ class CatalogController extends Controller
             ->get();
 
         return $banners->toArray();
-}
+    }
 
-    public function getWishlists(): array {
+    public function getWishlists(): array
+    {
         $jwtGuard = app('JWTGuard');
         $user = $jwtGuard->user();
 
@@ -48,18 +50,19 @@ class CatalogController extends Controller
 
         return $wishlists->first() ? [
             $wishlists->first()
-        ]: [];
+        ] : [];
     }
 
-    public function getCategories(): Collection {
-        $query = Category::query()->with([ 'image']);
+    public function getCategories(): Collection
+    {
+        $query = Category::query()->with(['image']);
         $query->where('published', '=', '1');
 
         // todo: inject it via container
         $appService = new AppService();
 
-        if($city = $appService->getCurrentCity()) {
-            $query->whereDoesntHave('hidden_categories_in_city', function($query) use($city) {
+        if ($city = $appService->getCurrentCity()) {
+            $query->whereDoesntHave('hidden_categories_in_city', function ($query) use ($city) {
                 return $query->where('city_id', $city->id);
             });
         }
@@ -83,7 +86,7 @@ class CatalogController extends Controller
         // todo: inject it via container
         $appService = new AppService();
         $hiddenCategoryIds = [];
-        if($city = $appService->getCurrentCity()) {
+        if ($city = $appService->getCurrentCity()) {
             $hiddenCategoryIds = $city->hidden_categories()
                 ->pluck('category_id')
                 ->toArray();
@@ -103,6 +106,14 @@ class CatalogController extends Controller
             }
         });
 
+        if (!empty($hiddenCategoryIds)) {
+            $db->where(function ($q) use ($hiddenCategoryIds) {
+                foreach ($hiddenCategoryIds as $hiddenId) {
+                    $q->whereRaw('NOT JSON_CONTAINS(category_id, ?)', json_encode([(int)$hiddenId]));
+                }
+            });
+        }
+
 
         $items = $db->get();
         $itemIds = $items->pluck('id')
@@ -118,18 +129,17 @@ class CatalogController extends Controller
                 'image_sets',
                 'prices',
                 'additional_prices',
-                'property_values' => function($query) {
+                'property_values' => function ($query) {
                     $query->where('value', '!=', '0');
                 }
             ]
         )->find($itemIds);
 
         // preserve order
-        return collect($itemIds)->map(function($itemId) use ($unorderedModels) {
-            return $unorderedModels->first(function($model) use ($itemId) {
+        return collect($itemIds)->map(function ($itemId) use ($unorderedModels) {
+            return $unorderedModels->first(function ($model) use ($itemId) {
                 return $model->id == $itemId;
             });
         });
     }
-
 }
