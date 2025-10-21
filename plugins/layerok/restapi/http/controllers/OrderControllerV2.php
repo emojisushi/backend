@@ -194,9 +194,11 @@ class OrderControllerV2 extends Controller
         if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
             if ($total / 100 < $area->min_amount) {
                 $courier_fee = $area->delivery_price;
-                $data['delivery_price'] = $courier_fee . " ₴";
+                $data['delivery_price_uah'] = $courier_fee . " ₴";
+                $incomingOrder['delivery_price'] = $courier_fee * 100;
             } else {
-                $data['delivery_price'] = 0 . " ₴";
+                $data['delivery_price_uah'] = 0 . " ₴";
+                $incomingOrder['delivery_price'] = 0;
             }
         }
 
@@ -555,7 +557,7 @@ class OrderControllerV2 extends Controller
             )
             ->field(
                 trans('layerok.restapi::lang.receipt.delivery_price'),
-                htmlspecialchars($data['delivery_price'] ?? null)
+                htmlspecialchars($data['delivery_price_uah'] ?? null)
             )
             ->newLine()
             ->b(trans('layerok.restapi::lang.receipt.order_items'))
@@ -655,7 +657,8 @@ class OrderControllerV2 extends Controller
             'spot_id'           => $data['spot_id'],
             'total'             => $total,
             'cart'              => json_encode($cart),
-            'real_spot_id'      => $real_spot_id
+            'real_spot_id'      => $real_spot_id,
+            'delivery_price'    => $data['delivery_price']
         ];
 
         // Create and return the order
