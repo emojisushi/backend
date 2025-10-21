@@ -25,10 +25,10 @@ class CityController extends Controller
 
         if ($includeDistricts) {
             $query->with(['districts' => function ($q) {
-                $q->with(['spot' => function ($q) {
+                $q->whereHas('spot', function ($q) {
                     $q->where('published', 1);
-                }]);
-            }]);
+                });
+            },'districts.spot']);
         }
 
         if ($limit) {
