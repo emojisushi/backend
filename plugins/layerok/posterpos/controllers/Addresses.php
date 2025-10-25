@@ -85,25 +85,14 @@ class Addresses extends Controller
             'suburb_ru',
             'lon',
             'lat',
+            'buildings'
         ]);
 
         return [
             'addresses' => $addresses
         ];
     }
-    // public function onUpdateAddress()
-    // {
-    //     $recordId = post('id');
-    //     $model = \layerok\PosterPos\Models\Address::find($recordId);
 
-    //     $this->vars['formWidget'] = $this->makeWidget(\Backend\Widgets\Form::class, [
-    //         'model' => $model,
-    //         'alias' => 'addressForm',
-    //         'config' => '$/layerok/models/address/fields.yaml'
-    //     ]);
-
-    //     return $this->makePartial('partials/update_address');
-    // }
     public function onSaveAddress()
     {
         $id = post('id');
@@ -112,6 +101,7 @@ class Addresses extends Controller
         $address->name_ru = post('name_ru');
         $address->suburb_ua = post('suburb_ua');
         $address->suburb_ru = post('suburb_ru');
+        $address->buildings = post('buildings');
         $address->save();
     }
     public function onAddAddress()
@@ -267,6 +257,7 @@ class Addresses extends Controller
             'name_ru',
             'suburb_ua',
             'suburb_ru',
+            'buildings',
             'lon',
             'lat',
         ]);
@@ -296,6 +287,12 @@ class Addresses extends Controller
                 'name_ru' => $address->name_ru,
                 'suburb_ua' => $address->suburb_ua,
                 'suburb_ru' => $address->suburb_ru,
+                'buildings' => !empty($address->buildings)
+                    ? array_map(
+                        'trim', // remove spaces
+                        explode(',', $address->buildings)
+                    )
+                    : [],
                 'spot_name' => $spotName,
                 'min_amount' => $min_amount,
                 'delivery_price' => $delivery_price,
