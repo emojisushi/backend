@@ -23,3 +23,6 @@
 1.0.17:
     - 'Add delivery_price to online orders table'
     - add_delivery_price_to_online_orders_table.php
+1.0.18:
+    - 'Add building to addresses table'
+    - add_buildings_to_addresses_table.php
