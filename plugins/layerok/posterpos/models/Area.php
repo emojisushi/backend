@@ -12,9 +12,10 @@ class Area extends Model
         'description',
         'coords',
         'color',
-        'min_amount',
+        'min_amount', //for free delivery
         'delivery_price',
         'spot_id',
+        'min', // to make delivery
     ];
 
     protected $casts = [

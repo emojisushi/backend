@@ -176,6 +176,9 @@ class Addresses extends Controller
         if (post('delivery_price') !== null) {
             $data['delivery_price'] = post('delivery_price');
         }
+        if (post('min') !== null) {
+            $data['min'] = post('min');
+        }
         if ($id) {
             $area = \Layerok\PosterPos\Models\Area::find($id);
             if ($area) {
@@ -248,6 +251,7 @@ class Addresses extends Controller
                     'spot_id' => $area->spot_id,
                     'min_amount' => $area->min_amount,
                     'delivery_price' => $area->delivery_price,
+                    'min' => $area->min,
                 ];
             });
 
@@ -267,12 +271,14 @@ class Addresses extends Controller
             $spotName = null;
             $min_amount = null;
             $delivery_price = null;
+            $min = null;
             foreach ($areas as $area) {
                 if ($this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
                     $min_amount = $area['min_amount'];
                     $delivery_price = $area['delivery_price'];
                     $spotId = $area['spot_id'];
                     $spotName = $spotMap[$spotId] ?? null;
+                    $min = $area['min'];
                     break;
                 }
             }
@@ -296,6 +302,7 @@ class Addresses extends Controller
                 'spot_name' => $spotName,
                 'min_amount' => $min_amount,
                 'delivery_price' => $delivery_price,
+                'min' => $min,
             ];
         })->filter();
 

@@ -341,6 +341,10 @@ function loadAreas() {
                             <input value="${
                                 area.delivery_price ?? ""
                             }" type="text" id="new-area-delivery-price" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Мин. стоимость для доставки</label>
+                            <input value="${
+                                area.min ?? ""
+                            }" type="text" id="new-area-min" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
 
                             <div class="form-floating">
                                 <select class="form-select" id="spotSelect-${
@@ -570,6 +574,8 @@ function updateArea(id) {
     let min_amount = document.getElementById("new-area-min-amount").value;
     let delivery_price = document.getElementById("new-area-delivery-price").value;
     let spot_id = document.getElementById(`spotSelect-${id}`).value;
+    let min = document.getElementById(`new-area-min`).value;
+
     $.request("onSaveArea", {
         data: {
             id,
@@ -578,6 +584,7 @@ function updateArea(id) {
             color,
             min_amount,
             delivery_price,
+            min,
             ...(spot_id !== "" && { spot_id: spot_id }),
         },
         success: function () {
