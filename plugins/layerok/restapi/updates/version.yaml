@@ -29,3 +29,6 @@
 1.0.19:
     - 'Add min to area table'
     - add_min_to_areas_table.php
+1.0.20:
+    - 'Change building column type in addresses table'
+    - change_building_in_addresses_table.php
