@@ -26,3 +26,6 @@
 1.0.18:
     - 'Add building to addresses table'
     - add_buildings_to_addresses_table.php
+1.0.19:
+    - 'Add min to area table'
+    - add_min_to_areas_table.php

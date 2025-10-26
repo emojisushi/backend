@@ -192,6 +192,9 @@ class OrderControllerV2 extends Controller
 
         $courier_fee = null;
         if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
+            if ($total / 100 < $area->min) {
+                return response()->json(['message' => 'Error', 'errors' => ['area_min' => ["Area min is $area->min"]]], 400);
+            }
             if ($total / 100 < $area->min_amount) {
                 $courier_fee = $area->delivery_price;
                 $data['delivery_price_uah'] = $courier_fee . " ₴";
