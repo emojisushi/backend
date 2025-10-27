@@ -13,5 +13,6 @@ class Address extends Model
         'lat',
         'suburb_ua',
         'suburb_ru',
+        'buildings',
     ];
 }

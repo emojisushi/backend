@@ -25,6 +25,7 @@ use \Layerok\Restapi\Http\Controllers\CityController;
 use \Layerok\Restapi\Http\Controllers\PromotionController;
 use \Layerok\Restapi\Http\Controllers\BannerController;
 use \Layerok\Restapi\Http\Controllers\OrderControllerV2;
+use \Layerok\Restapi\Http\Controllers\SmsController;
 use \Fruitcake\Cors\HandleCors;
 
 Route::group([
@@ -103,12 +104,14 @@ Route::group([
 
         Route::post('user/customer', [CustomerController::class, 'save']);
         Route::get('user/bonus/history', [BonusController::class, 'history']);
-
     });
+
+    Route::get('/sms/check-phone', [SmsController::class, 'checkPhone']);
+    Route::post('/sms/generate-code', [SmsController::class, 'generateCode']);
+    Route::post('/sms/check-code', [SmsController::class, 'checkCode']);
 
     Route::post('/log', function () {
         $content = \Illuminate\Support\Facades\Request::getContent();
         \Illuminate\Support\Facades\Log::error($content);
     });
-
 });

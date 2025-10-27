@@ -188,6 +188,7 @@ class WayForPayController
             'last_name' => $order->last_name ?? null,
             'service_mode' => $order->service_mode,
             'address' => $order->address,
+            'delivery_price' => $order->delivery_price,
             'payment'  => ['type' => 1, 'sum' => $order->total, 'currency' => 'UAH']
         ];
 
@@ -198,6 +199,7 @@ class WayForPayController
         $poster_order_id = $posterResult->response->incoming_order_id ?? null;
 
         $order->poster_id = $poster_order_id;
+        $order['delivery_price_uah'] =  $order->delivery_price / 100 . " ₴";
 
 
         // if (isset($posterResult->error) || !isset($posterResult->response)) { // error or poster is down -> send to telegram

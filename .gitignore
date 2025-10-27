@@ -24,3 +24,4 @@ nbproject
 # Project
 /bootstrap/compiled.php
 /vendor
+.vscode

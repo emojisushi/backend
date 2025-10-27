@@ -17,3 +17,21 @@
 1.0.15:
     - 'Add online_orders table'
     - add_online_orders_table.php
+1.0.16:
+    - 'Remove foreign key spot id'
+    - remove_foreign_key_spot_id.php
+1.0.17:
+    - 'Add delivery_price to online orders table'
+    - add_delivery_price_to_online_orders_table.php
+1.0.18:
+    - 'Add building to addresses table'
+    - add_buildings_to_addresses_table.php
+1.0.19:
+    - 'Add min to area table'
+    - add_min_to_areas_table.php
+1.0.20:
+    - 'Change building column type in addresses table'
+    - change_building_in_addresses_table.php
+1.0.21:
+    - 'Add sms_confirmations table'
+    - add_sms_confirmations_table.php

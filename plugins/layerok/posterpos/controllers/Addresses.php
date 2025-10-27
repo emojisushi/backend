@@ -85,25 +85,14 @@ class Addresses extends Controller
             'suburb_ru',
             'lon',
             'lat',
+            'buildings'
         ]);
 
         return [
             'addresses' => $addresses
         ];
     }
-    // public function onUpdateAddress()
-    // {
-    //     $recordId = post('id');
-    //     $model = \layerok\PosterPos\Models\Address::find($recordId);
 
-    //     $this->vars['formWidget'] = $this->makeWidget(\Backend\Widgets\Form::class, [
-    //         'model' => $model,
-    //         'alias' => 'addressForm',
-    //         'config' => '$/layerok/models/address/fields.yaml'
-    //     ]);
-
-    //     return $this->makePartial('partials/update_address');
-    // }
     public function onSaveAddress()
     {
         $id = post('id');
@@ -112,6 +101,7 @@ class Addresses extends Controller
         $address->name_ru = post('name_ru');
         $address->suburb_ua = post('suburb_ua');
         $address->suburb_ru = post('suburb_ru');
+        $address->buildings = post('buildings');
         $address->save();
     }
     public function onAddAddress()
@@ -186,6 +176,9 @@ class Addresses extends Controller
         if (post('delivery_price') !== null) {
             $data['delivery_price'] = post('delivery_price');
         }
+        if (post('min') !== null) {
+            $data['min'] = post('min');
+        }
         if ($id) {
             $area = \Layerok\PosterPos\Models\Area::find($id);
             if ($area) {
@@ -258,6 +251,7 @@ class Addresses extends Controller
                     'spot_id' => $area->spot_id,
                     'min_amount' => $area->min_amount,
                     'delivery_price' => $area->delivery_price,
+                    'min' => $area->min,
                 ];
             });
 
@@ -267,6 +261,7 @@ class Addresses extends Controller
             'name_ru',
             'suburb_ua',
             'suburb_ru',
+            'buildings',
             'lon',
             'lat',
         ]);
@@ -276,12 +271,14 @@ class Addresses extends Controller
             $spotName = null;
             $min_amount = null;
             $delivery_price = null;
+            $min = null;
             foreach ($areas as $area) {
                 if ($this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
                     $min_amount = $area['min_amount'];
                     $delivery_price = $area['delivery_price'];
                     $spotId = $area['spot_id'];
                     $spotName = $spotMap[$spotId] ?? null;
+                    $min = $area['min'];
                     break;
                 }
             }
@@ -296,9 +293,16 @@ class Addresses extends Controller
                 'name_ru' => $address->name_ru,
                 'suburb_ua' => $address->suburb_ua,
                 'suburb_ru' => $address->suburb_ru,
+                'buildings' => !empty($address->buildings)
+                    ? array_map(
+                        'trim', // remove spaces
+                        explode(',', $address->buildings)
+                    )
+                    : [],
                 'spot_name' => $spotName,
                 'min_amount' => $min_amount,
                 'delivery_price' => $delivery_price,
+                'min' => $min,
             ];
         })->filter();
 

@@ -266,7 +266,18 @@ function loadAddressses() {
                 border:1px solid #ccc;
             "
         >
-
+        <label style="font-weight:bold; display:block; margin-bottom:2px;">Номера домов</label>
+        <textarea
+            rows=3
+            id="buildings-${addr.Id}"
+            placeholder="Номера домов без пробела (1,2,3б)"
+            style="
+                width: 100%;
+                padding: 5px 8px;
+                border-radius:4px;
+                border:1px solid #ccc;
+            "
+        >${addr.buildings || ""}</textarea>
         <!-- Save button -->
         <button
             onclick="saveAddress(${addr.Id})"
@@ -330,6 +341,10 @@ function loadAreas() {
                             <input value="${
                                 area.delivery_price ?? ""
                             }" type="text" id="new-area-delivery-price" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Мин. стоимость для доставки</label>
+                            <input value="${
+                                area.min ?? ""
+                            }" type="text" id="new-area-min" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
 
                             <div class="form-floating">
                                 <select class="form-select" id="spotSelect-${
@@ -541,9 +556,10 @@ function saveAddress(id) {
     let name_ru = document.getElementById(`name-ru-${id}`).value;
     let suburb_ua = document.getElementById(`suburb-ua-${id}`).value;
     let suburb_ru = document.getElementById(`suburb-ru-${id}`).value;
+    let buildings = document.getElementById(`buildings-${id}`).value;
 
     $.request("onSaveAddress", {
-        data: { id, name_ua, name_ru, suburb_ua, suburb_ru },
+        data: { id, name_ua, name_ru, suburb_ua, suburb_ru, buildings},
         success: function () {
             alert("Збережено");
             layerGroup.clearLayers();
@@ -558,6 +574,8 @@ function updateArea(id) {
     let min_amount = document.getElementById("new-area-min-amount").value;
     let delivery_price = document.getElementById("new-area-delivery-price").value;
     let spot_id = document.getElementById(`spotSelect-${id}`).value;
+    let min = document.getElementById(`new-area-min`).value;
+
     $.request("onSaveArea", {
         data: {
             id,
@@ -566,6 +584,7 @@ function updateArea(id) {
             color,
             min_amount,
             delivery_price,
+            min,
             ...(spot_id !== "" && { spot_id: spot_id }),
         },
         success: function () {
