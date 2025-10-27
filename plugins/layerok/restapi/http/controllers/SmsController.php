@@ -43,9 +43,9 @@ class SmsController extends Controller
 
         // $sms = new TurboSMS();
         // $sended = $sms->sendMessages($phone, "Vash kod: $code");
-        $username = env('INTELTELE_USERNAME');
-        $apiKey = env('INTELTELE_API_KEY');
-        $sender = env('INTELTELE_SENDER');
+        $username = config('sms.inteltele_username');
+        $apiKey = config('sms.inteltele_api_key');
+        $sender = config('sms.inteltele_sender');
         $phoneSanitaized = preg_replace('/[^0-9]/', '', $phone); // sanitize
         $url = 'http://api.sms.intel-tele.com/message/send/';
 
@@ -58,7 +58,7 @@ class SmsController extends Controller
             'message' => "Vash kod: {$code}\n\n@$domain #$code",
         ]);
 
-            return true;
+        return true;
     }
 
     public function checkCode(Request $request)
