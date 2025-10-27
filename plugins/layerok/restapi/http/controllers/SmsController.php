@@ -5,7 +5,7 @@ namespace Layerok\Restapi\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Layerok\PosterPos\Models\SmsConfirmation;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
 
 class SmsController extends Controller
 {
@@ -30,6 +30,9 @@ class SmsController extends Controller
     public function generateCode(Request $request)
     {
         $phone = $request->input('phone');
+        $city_slug = $request->input('city_slug');
+        $domain = "$city_slug.emojisushi.com.ua";
+        // $domain = request()->getHost();
 
         $code = random_int(100000, 999999);
 
@@ -38,9 +41,24 @@ class SmsController extends Controller
             ['last_code' => $code, 'confirmed' => false]
         );
 
-        // e.g. SmsService::send($phone, "Your code is: {$code}");
+        // $sms = new TurboSMS();
+        // $sended = $sms->sendMessages($phone, "Vash kod: $code");
+        $username = env('INTELTELE_USERNAME');
+        $apiKey = env('INTELTELE_API_KEY');
+        $sender = env('INTELTELE_SENDER');
+        $phoneSanitaized = preg_replace('/[^0-9]/', '', $phone); // sanitize
+        $url = 'http://api.sms.intel-tele.com/message/send/';
 
-        return true;
+        $response = Http::asForm()->get($url, [
+            'username' => $username,
+            'api_key' => $apiKey,
+            'from' => $sender,
+            'to' => $phoneSanitaized,
+            'priority' => 3,
+            'message' => "Vash kod: {$code}\n\n@$domain #$code",
+        ]);
+
+            return true;
     }
 
     public function checkCode(Request $request)

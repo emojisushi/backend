@@ -106,7 +106,7 @@ Route::group([
         Route::get('user/bonus/history', [BonusController::class, 'history']);
     });
 
-    Route::post('/sms/check-phone', [SmsController::class, 'checkPhone']);
+    Route::get('/sms/check-phone', [SmsController::class, 'checkPhone']);
     Route::post('/sms/generate-code', [SmsController::class, 'generateCode']);
     Route::post('/sms/check-code', [SmsController::class, 'checkCode']);
 
