@@ -189,7 +189,7 @@ class WayForPayController
             'service_mode' => $order->service_mode,
             'address' => $order->address,
             'delivery_price' => $order->delivery_price,
-            'payment'  => ['type' => 1, 'sum' => $order->total, 'currency' => 'UAH']
+            'payment'  => ['type' => 1, 'sum' => $order->total + $order->delivery_price, 'currency' => 'UAH']
         ];
 
 
