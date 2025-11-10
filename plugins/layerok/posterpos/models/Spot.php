@@ -1,4 +1,6 @@
-<?php namespace Layerok\PosterPos\Models;
+<?php
+
+namespace Layerok\PosterPos\Models;
 
 use Layerok\Telegram\Models\Bot;
 use Layerok\Telegram\Models\Chat;
@@ -43,6 +45,7 @@ class Spot extends Model
         'merchant_secret_key',
         'domain_name',
     ];
+    protected $hidden = ['merchant_account', 'merchant_secret_key'];
 
     public $slugs = [
         'slug' => 'name',
@@ -66,7 +69,13 @@ class Spot extends Model
             'table' => 'layerok_posterpos_hide_categories_in_spot',
             'key' => 'spot_id',
             'otherKey' => 'category_id',
-        ]
+        ],
+        'unavailable_categories' => [
+            Category::class,
+            'table' => 'layerok_posterpos_unavailable_categories_in_spot',
+            'key' => 'spot_id',
+            'otherKey' => 'category_id',
+        ],
     ];
 
     public $attachMany = [
@@ -86,18 +95,20 @@ class Spot extends Model
         'areas' => \Layerok\PosterPos\Models\Area::class,
     ];
 
-    public function afterDelete() {
+    public function afterDelete()
+    {
         $this->hideProducts()->delete();
         $this->hideCategories()->delete();
     }
 
-    public static function findBySlugOrId($slug_or_id) {
-        $key = is_numeric($slug_or_id) ? 'id': 'slug';
+    public static function findBySlugOrId($slug_or_id)
+    {
+        $key = is_numeric($slug_or_id) ? 'id' : 'slug';
         return self::where($key, $slug_or_id)->first();
     }
 
-    public static function getMain() {
+    public static function getMain()
+    {
         return self::where('is_main', 1)->first();
     }
-
 }

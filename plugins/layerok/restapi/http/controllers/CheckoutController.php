@@ -32,7 +32,7 @@ class CheckoutController extends Controller
     }
 
     public function getSpots(): array {
-        $query = Spot::with('city')
+        $query = Spot::with('city', 'unavailable_categories')
             ->where('published', '=', '1');
 
         $records = $query->get();

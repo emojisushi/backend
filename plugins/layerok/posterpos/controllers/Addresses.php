@@ -236,8 +236,18 @@ class Addresses extends Controller
             return ['addresses' => []];
         }
 
-        $spots = \Layerok\PosterPos\Models\Spot::where('city_id', $city->id)->get();
-        $spotMap = $spots->pluck('name', 'id')->toArray();
+        $spots = \Layerok\PosterPos\Models\Spot::with('unavailable_categories')
+            ->where('city_id', $city->id)
+            ->get();
+        $spotMap = $spots->mapWithKeys(function ($spot) {
+            return [
+                $spot->id => [
+                    'name' => $spot->name,
+                    'unavailable_categories' => $spot->unavailable_categories->pluck('id')->toArray(),
+                ],
+            ];
+        });
+
 
         $availableSpotIds = $spots
             ->where('temporarily_unavailable', false)
@@ -269,6 +279,7 @@ class Addresses extends Controller
         $result = $addresses->map(function ($address) use ($areas, $spotMap) {
             $spotId = null;
             $spotName = null;
+            $unavailableCategories = null;
             $min_amount = null;
             $delivery_price = null;
             $min = null;
@@ -277,7 +288,8 @@ class Addresses extends Controller
                     $min_amount = $area['min_amount'];
                     $delivery_price = $area['delivery_price'];
                     $spotId = $area['spot_id'];
-                    $spotName = $spotMap[$spotId] ?? null;
+                    $spotName = $spotMap[$spotId]['name'] ?? null;
+                    $unavailableCategories = $spotMap[$spotId]['unavailable_categories'] ?? null;
                     $min = $area['min'];
                     break;
                 }
@@ -303,6 +315,7 @@ class Addresses extends Controller
                 'min_amount' => $min_amount,
                 'delivery_price' => $delivery_price,
                 'min' => $min,
+                'unavailable_categories' => $unavailableCategories
             ];
         })->filter();
 

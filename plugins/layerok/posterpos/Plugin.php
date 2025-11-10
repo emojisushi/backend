@@ -303,6 +303,12 @@ class Plugin extends PluginBase
                         'type' => 'relation'
                     ]
                 ]);
+                $widget->addFields([
+                    'unavailable_categories_in_spot' => [
+                        'label' => 'Недоступная категория на точке',
+                        'type' => 'relation'
+                    ]
+                ]);
             }
 
             if ($widget->model instanceof ShippingMethod) {
@@ -371,6 +377,13 @@ class Plugin extends PluginBase
                 'table'    => 'layerok_posterpos_hidden_categories_in_city',
                 'key'      => 'category_id',
                 'otherKey' => 'city_id',
+            ];
+
+            $model->belongsToMany['unavailable_categories_in_spot'] = [
+                Spot::class,
+                'table'    => 'layerok_posterpos_unavailable_categories_in_spot',
+                'key'      => 'category_id',
+                'otherKey' => 'spot_id',
             ];
 
             $model->morphToMany['poster_accounts'] = $this->posterAccountModelRelation();
