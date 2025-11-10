@@ -43,6 +43,7 @@ class Spot extends Model
         'merchant_secret_key',
         'domain_name',
     ];
+    protected $hidden = ['merchant_account', 'merchant_secret_key'];
 
     public $slugs = [
         'slug' => 'name',
