@@ -4,7 +4,7 @@
 
 
 <?php if (\Layerok\PosterPos\Models\AddressSettings::get('enable_address_system')): ?>
-    <div>
+    <div style="width: 100%; height:80%">
         <?= $mapPartial ?>
     </div>
     <div>
