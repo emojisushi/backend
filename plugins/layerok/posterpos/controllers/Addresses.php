@@ -236,7 +236,7 @@ class Addresses extends Controller
             return ['addresses' => []];
         }
 
-        $spots = \Layerok\PosterPos\Models\Spot::with('unavailable_categories')
+        $spots = \Layerok\PosterPos\Models\Spot::with('unavailable_categories', 'unavailable_products')
             ->where('city_id', $city->id)
             ->get();
         $spotMap = $spots->mapWithKeys(function ($spot) {
@@ -244,6 +244,7 @@ class Addresses extends Controller
                 $spot->id => [
                     'name' => $spot->name,
                     'unavailable_categories' => $spot->unavailable_categories->pluck('id')->toArray(),
+                    'unavailable_products' => $spot->unavailable_products->pluck('id')->toArray(),
                 ],
             ];
         });
@@ -280,6 +281,7 @@ class Addresses extends Controller
             $spotId = null;
             $spotName = null;
             $unavailableCategories = null;
+            $unavailableProducts = null;
             $min_amount = null;
             $delivery_price = null;
             $min = null;
@@ -290,6 +292,7 @@ class Addresses extends Controller
                     $spotId = $area['spot_id'];
                     $spotName = $spotMap[$spotId]['name'] ?? null;
                     $unavailableCategories = $spotMap[$spotId]['unavailable_categories'] ?? null;
+                    $unavailableProducts = $spotMap[$spotId]['unavailable_products'] ?? null;
                     $min = $area['min'];
                     break;
                 }
@@ -315,7 +318,8 @@ class Addresses extends Controller
                 'min_amount' => $min_amount,
                 'delivery_price' => $delivery_price,
                 'min' => $min,
-                'unavailable_categories' => $unavailableCategories
+                'unavailable_categories' => $unavailableCategories,
+                'unavailable_products' => $unavailableProducts
             ];
         })->filter();
 

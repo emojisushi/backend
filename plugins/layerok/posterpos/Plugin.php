@@ -1,4 +1,6 @@
-<?php namespace Layerok\PosterPos;
+<?php
+
+namespace Layerok\PosterPos;
 
 use Backend;
 use File;
@@ -62,7 +64,8 @@ class Plugin extends PluginBase
         App::registerClassAlias('Excel',  Excel::class);
     }
 
-    public function posterAccountsRelationConfig() {
+    public function posterAccountsRelationConfig()
+    {
         // todo: move to yaml file
         return [
             'label'   => 'Poster account',
@@ -100,7 +103,8 @@ class Plugin extends PluginBase
         ];
     }
 
-    public function posterAccountModelRelation() {
+    public function posterAccountModelRelation()
+    {
         return [
             PosterAccount::class,
             'table'    => 'layerok_posterpos_poster_accountable',
@@ -118,23 +122,23 @@ class Plugin extends PluginBase
     public function boot()
     {
 
-        Product::deleted(function($model) {
+        Product::deleted(function ($model) {
             $model->poster_accounts()->sync([]);
         });
 
-        Variant::deleted(function($model) {
+        Variant::deleted(function ($model) {
             $model->poster_accounts()->sync([]);
         });
 
-        PropertyGroup::deleted(function($model) {
+        PropertyGroup::deleted(function ($model) {
             $model->poster_accounts()->sync([]);
         });
 
-        Property::deleted(function($model) {
+        Property::deleted(function ($model) {
             $model->poster_accounts()->sync([]);
         });
 
-        Category::deleted(function($model) {
+        Category::deleted(function ($model) {
             $model->poster_accounts()->sync([]);
         });
 
@@ -149,7 +153,7 @@ class Plugin extends PluginBase
                 return;
             }
 
-            if(!$widget->model->exists) {
+            if (!$widget->model->exists) {
                 $widget->removeField('user_defined_id');
                 $widget->removeField('meta_title');
                 $widget->removeField('meta_description');
@@ -157,7 +161,7 @@ class Plugin extends PluginBase
                 return;
             }
 
-            if($widget->model->exists) {
+            if ($widget->model->exists) {
                 $widget->removeTab('offline.mall::lang.common.accessories');
                 $widget->removeTab('offline.mall::lang.common.seo');
                 $widget->removeTab('offline.mall::lang.common.reviews');
@@ -186,11 +190,10 @@ class Plugin extends PluginBase
                 $widget->removeField('description');
                 $widget->removeField('user_defined_id');
             }
-
         });
 
         // extend property
-        Event::listen('system.extendConfigFile', function ( $path, $config) {
+        Event::listen('system.extendConfigFile', function ($path, $config) {
             if ($path === '/plugins/offline/mall/models/property/fields_pivot.yaml') {
                 $config['fields']['options']['form']['fields']['poster_id'] = [
                     'label' => 'Poster ID',
@@ -205,7 +208,7 @@ class Plugin extends PluginBase
 
 
         // extend property group
-        Event::listen('system.extendConfigFile', function ( $path, $config) {
+        Event::listen('system.extendConfigFile', function ($path, $config) {
             if ($path === '/plugins/offline/mall/models/propertygroup/fields.yaml') {
                 $config['fields']['poster_accounts'] = [
                     'label' => 'Poster accounts',
@@ -213,7 +216,7 @@ class Plugin extends PluginBase
                 ];
             }
 
-            if($path === '/plugins/offline/mall/controllers/propertygroups/config_relation.yaml') {
+            if ($path === '/plugins/offline/mall/controllers/propertygroups/config_relation.yaml') {
                 $config['poster_accounts'] = $this->posterAccountsRelationConfig();
             }
 
@@ -221,7 +224,7 @@ class Plugin extends PluginBase
         });
 
         // extend category
-        Event::listen('system.extendConfigFile', function ( $path, $config) {
+        Event::listen('system.extendConfigFile', function ($path, $config) {
             if ($path === '/plugins/offline/mall/models/category/fields.yaml') {
                 $config['fields']['poster_accounts'] = [
                     'label' => 'Poster accounts',
@@ -233,7 +236,7 @@ class Plugin extends PluginBase
                 ];
             }
 
-            if($path === '/plugins/offline/mall/controllers/categories/config_relation.yaml') {
+            if ($path === '/plugins/offline/mall/controllers/categories/config_relation.yaml') {
                 $config['poster_accounts'] = $this->posterAccountsRelationConfig();
             }
 
@@ -241,7 +244,7 @@ class Plugin extends PluginBase
         });
 
         // extend shipping method
-        Event::listen('system.extendConfigFile', function ( $path, $config) {
+        Event::listen('system.extendConfigFile', function ($path, $config) {
             if ($path === '/plugins/offline/mall/models/shippingmethod/fields.yaml') {
                 $config['fields']['code'] = [
                     'label' => 'Code',
@@ -259,8 +262,8 @@ class Plugin extends PluginBase
         });
 
         // extend product
-        Event::listen('system.extendConfigFile', function ( $path, $config) {
-            if($path === '/plugins/offline/mall/controllers/products/config_relation.yaml') {
+        Event::listen('system.extendConfigFile', function ($path, $config) {
+            if ($path === '/plugins/offline/mall/controllers/products/config_relation.yaml') {
                 $config['poster_accounts'] = $this->posterAccountsRelationConfig();
                 return $config;
             }
@@ -273,11 +276,16 @@ class Plugin extends PluginBase
                 return $config;
             }
 
-            if($path === '/plugins/offline/mall/models/product/fields_edit.yaml') {
-//                $config['tabs']['fields']['hide_products_in_spot'] = [
-//                    'type' => 'relation',
-//                    'tab' => 'offline.mall::lang.product.general'
-//                ];
+            if ($path === '/plugins/offline/mall/models/product/fields_edit.yaml') {
+                //    $config['tabs']['fields']['hide_products_in_spot'] = [
+                //        'type' => 'relation',
+                //        'tab' => 'offline.mall::lang.product.general'
+                //    ];
+                $config['tabs']['fields']['unavailable_products_in_spot'] = [
+                    'label' => 'Недоступный товар на точке',
+                    'type' => 'relation',
+                    'tab' => 'offline.mall::lang.product.general'
+                ];
                 $config['tabs']['fields']['poster_accounts'] = [
                     'type' => 'relation',
                     'tab' => 'offline.mall::lang.product.general'
@@ -348,18 +356,18 @@ class Plugin extends PluginBase
         });
 
 
-        Event::listen('backend.page.beforeDisplay', function ( $backendController, $action, $params) {
+        Event::listen('backend.page.beforeDisplay', function ($backendController, $action, $params) {
             // workaround, trick controller to look for the template outside the self plugin folder
-            if($backendController instanceof Products && $action === 'export') {
+            if ($backendController instanceof Products && $action === 'export') {
                 $backendController->addViewPath(File::normalizePath("plugins\\layerok\\posterpos\\controllers\\products"));
             }
-       });
+        });
 
-        ShippingMethod::extend((function($model) {
+        ShippingMethod::extend((function ($model) {
             $model->fillable[] = 'code';
         }));
 
-        Category::extend(function($model){
+        Category::extend(function ($model) {
             $model->fillable[] = 'published';
 
             $model->casts['published'] = 'boolean';
@@ -389,29 +397,34 @@ class Plugin extends PluginBase
             $model->morphToMany['poster_accounts'] = $this->posterAccountModelRelation();
         });
 
-        Product::extend(function($model){
+        Product::extend(function ($model) {
             $model->belongsToMany['hide_products_in_spot'] = [
                 Spot::class,
                 'table'    => 'layerok_posterpos_hide_products_in_spot',
                 'key'      => 'product_id',
                 'otherKey' => 'spot_id',
             ];
-
+            $model->belongsToMany['unavailable_products_in_spot'] = [
+                Spot::class,
+                'table'    => 'layerok_posterpos_unavailable_products_in_spot',
+                'key'      => 'product_id',
+                'otherKey' => 'spot_id',
+            ];
             $model->morphToMany['poster_accounts'] = $this->posterAccountModelRelation();
         });
 
-        Variant::extend(function($model){
+        Variant::extend(function ($model) {
             //$model->addFillable('poster_id');
             $model->morphToMany['poster_accounts'] = $this->posterAccountModelRelation();
         });
 
-        Property::extend(function($model){
+        Property::extend(function ($model) {
             $model->fillable[] = 'poster_type'; // dish or product
 
             $model->morphToMany['poster_accounts'] = $this->posterAccountModelRelation();
         });
 
-        PropertyGroup::extend(function($model){
+        PropertyGroup::extend(function ($model) {
             $model->morphToMany['poster_accounts'] = $this->posterAccountModelRelation();
         });
 
@@ -429,7 +442,6 @@ class Plugin extends PluginBase
             $model->fillable[] = 'spot_id';
             $model->hasOne['spot'] = Spot::class;
         });
-
     }
 
 
@@ -532,6 +544,4 @@ class Plugin extends PluginBase
             ]
         ];
     }
-
-
 }
