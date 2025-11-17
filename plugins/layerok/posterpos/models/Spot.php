@@ -76,6 +76,12 @@ class Spot extends Model
             'key' => 'spot_id',
             'otherKey' => 'category_id',
         ],
+        'unavailable_products' => [
+            Product::class,
+            'table' => 'layerok_posterpos_unavailable_products_in_spot',
+            'key' => 'spot_id',
+            'otherKey' => 'product_id',
+        ],
     ];
 
     public $attachMany = [
