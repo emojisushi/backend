@@ -132,3 +132,7 @@
 1.1.43:
     - 'Add unavailable products in spot table'
     - create_unavailable_products_in_spot_table.php
+  
+1.1.44:
+    - 'Add recommended products in spots table'
+    - create_recommended_products_in_spot_table.php
