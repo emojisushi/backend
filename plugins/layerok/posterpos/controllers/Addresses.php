@@ -254,7 +254,7 @@ class Addresses extends Controller
 
 
         $availableSpotIds = $spots
-            ->where('temporarily_unavailable', false)
+            // ->where('temporarily_unavailable', false) // показывать улицу даже если спот закрыт
             ->pluck('id');
 
         $areas = \Layerok\PosterPos\Models\Area::whereIn('spot_id', $availableSpotIds)
