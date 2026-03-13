@@ -309,7 +309,7 @@ class PosterTransition
         }
 
         $product->update([
-            /*'name' => (string)$value->product_name,*/
+            'name' => (string)$value->product_name,
             'weight'  => (int)$value->out,
             'description_short' => implode(
                 ', ',
