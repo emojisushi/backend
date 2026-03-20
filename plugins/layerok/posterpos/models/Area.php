@@ -16,6 +16,8 @@ class Area extends Model
         'delivery_price',
         'spot_id',
         'min', // to make delivery
+        'delivery_minutes',
+        'default_delivery_minutes',
     ];
 
     protected $casts = [

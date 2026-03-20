@@ -181,6 +181,21 @@ class Addresses extends Controller
         if (post('min') !== null) {
             $data['min'] = post('min');
         }
+        if (post('delivery_minutes') !== null) {
+            if (post('delivery_minutes') === '') {
+                $data['delivery_minutes'] = 0;
+            } else {
+                $data['delivery_minutes'] = post('delivery_minutes');
+            }
+        }
+        if (post('default_delivery_minutes') !== null) {
+            if (post('default_delivery_minutes') === '') {
+                $data['default_delivery_minutes'] = 0;
+            } else {
+                $data['default_delivery_minutes'] = post('default_delivery_minutes');
+            }
+        }
+
         if ($id) {
             $area = \Layerok\PosterPos\Models\Area::find($id);
             if ($area) {
@@ -248,6 +263,7 @@ class Addresses extends Controller
                     'unavailable_categories' => $spot->unavailable_categories->pluck('id')->toArray(),
                     'unavailable_products' => $spot->unavailable_products->pluck('id')->toArray(),
                     'recommended_products' => $spot->recommended_products->pluck('id')->toArray(),
+                    'wait_minutes_delivery' => $spot->wait_minutes_delivery
                 ],
             ];
         });
@@ -266,6 +282,7 @@ class Addresses extends Controller
                     'min_amount' => $area->min_amount,
                     'delivery_price' => $area->delivery_price,
                     'min' => $area->min,
+                    'delivery_minutes' => $area->delivery_minutes,
                 ];
             });
 
@@ -289,6 +306,7 @@ class Addresses extends Controller
             $min_amount = null;
             $delivery_price = null;
             $min = null;
+            $wait_minutes_delivery = 0;
             foreach ($areas as $area) {
                 if ($this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
                     $min_amount = $area['min_amount'];
@@ -298,7 +316,9 @@ class Addresses extends Controller
                     $unavailableCategories = $spotMap[$spotId]['unavailable_categories'] ?? null;
                     $unavailableProducts = $spotMap[$spotId]['unavailable_products'] ?? null;
                     $recommendedProducts = $spotMap[$spotId]['recommended_products'] ?? null;
-                    
+                    $wait_minutes_delivery += $spotMap[$spotId]['wait_minutes_delivery'] ?? 0;
+                    $wait_minutes_delivery += $area['delivery_minutes'] ?? 0;
+
                     $min = $area['min'];
                     break;
                 }
@@ -326,7 +346,8 @@ class Addresses extends Controller
                 'min' => $min,
                 'unavailable_categories' => $unavailableCategories,
                 'unavailable_products' => $unavailableProducts,
-                'recommended_products' => $recommendedProducts
+                'recommended_products' => $recommendedProducts,
+                'wait_minutes_delivery' => $wait_minutes_delivery
             ];
         })->filter();
 

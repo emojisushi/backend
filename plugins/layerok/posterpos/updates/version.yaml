@@ -136,3 +136,19 @@
 1.1.44:
     - 'Add recommended products in spots table'
     - create_recommended_products_in_spot_table.php
+
+1.1.46:
+    - 'Add wait_minutes_spot to spots table'
+    - create_wait_minutes_spot_in_spots_table.php
+
+1.1.47:
+    - 'Add wait_minutes_delivery to spots table'
+    - create_wait_minutes_delivery_in_spots_table.php
+
+1.2.3:
+    - 'Add default_wait_minutes_delivery to spots table'
+    - create_default_wait_minutes_delivery_in_spots_table.php
+    
+1.2.4:
+    - 'Add default_wait_minutes_spot to spots table'
+    - create_default_wait_minutes_spot_in_spots_table.php

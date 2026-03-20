@@ -67,10 +67,10 @@ class WayForPayController
 
         if ($transaction->isStatusApproved()) {
             $order = OnlineOrder::where('online_payment_id', $transaction->getOrderReference())->first();
-            
+
             $order->status = OnlineOrderStatus::PAID;
             $order->save();
-            
+
             $poster_id = $this->sendPosterOrder($spot->id, $transaction->getOrderReference());
             $order->poster_id = $poster_id;
 
@@ -163,7 +163,14 @@ class WayForPayController
         //     // }
         //     // return Redirect::to(WayforpaySettings::get('thankyou_url') . '?location_confirmed=true&order_id=' . $data['orderReference']);
         // }
-        return Redirect::to(WayforpaySettings::get('status_url') . '?location_confirmed=true&order_id=' . $data['orderReference']);
+        $params = ['location_confirmed' => 'true', 'order_id' => $data['orderReference']];
+
+        $waitTime = request()->query('wait_time');
+        if ($waitTime !== null) {
+            $params['wait_time'] = $waitTime;
+        }
+        $baseUrl = WayforpaySettings::get('status_url');
+        return Redirect::to($baseUrl . '?' . http_build_query($params));
     }
     public function sendPosterOrder($real_spot_id, $order_id)
     {

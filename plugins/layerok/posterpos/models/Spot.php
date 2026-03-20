@@ -44,6 +44,8 @@ class Spot extends Model
         'merchant_account',
         'merchant_secret_key',
         'domain_name',
+        'wait_minutes_spot',
+        'wait_minutes_delivery',
     ];
     protected $hidden = ['merchant_account', 'merchant_secret_key'];
 

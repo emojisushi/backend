@@ -73,6 +73,7 @@ class OrderControllerV2 extends Controller
         $address = null;
         $mode = ServiceMode::ON_SITE;
         $area = null;
+        $delivery_time = $spot->wait_minutes_delivery ?? 0;
         if ($shippingMethod->code === ShippingMethodCode::COURIER) {
             $spotId = null;
             $mode = ServiceMode::COURIER;
@@ -88,6 +89,7 @@ class OrderControllerV2 extends Controller
                         )
                     ) {
                         $area = $lArea;
+                        $delivery_time += $lArea["delivery_minutes"];
                         $spotId = $lArea['spot_id'];
                         break;
                     }
@@ -292,7 +294,7 @@ class OrderControllerV2 extends Controller
                 ->setMerchantDomainName($domainName)
                 ->setClient($client)
                 ->setProducts(new ProductCollection($products))
-                ->setReturnUrl(WayforpaySettings::get('return_url') . "?order_id=$order_id")
+                ->setReturnUrl(WayforpaySettings::get('return_url') . "?order_id=$order_id&wait_time=$delivery_time")
                 ->setServiceUrl(WayforpaySettings::get('service_url') . "?spot_id=$spot->id")
                 ->setLanguage(WayforpaySettings::get('language'))
                 ->setOrderLifetime(600)
