@@ -471,6 +471,11 @@ class Plugin extends PluginBase
                         'icon'   => 'icon-map-marker',
                         'url'    => Backend::url('layerok/posterpos/spot'),
                     ],
+                    'posterpos-wait-time' => [
+                        'label' => "Wait time",
+                        'icon'  => 'icon-clock',
+                        'url'   => Backend::url('layerok/posterpos/waittime'),
+                    ],
                     'posterpos-cities' => [
                         'label' => "Cities",
                         'icon'   => 'icon-globe',

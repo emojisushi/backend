@@ -337,6 +337,7 @@ function loadAreas() {
                             <input value="${
                                 area.min_amount ?? ""
                             }" type="text" id="new-area-min-amount" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            
                             <label style="font-weight:bold; display:block;">Стоимость доставки</label>
                             <input value="${
                                 area.delivery_price ?? ""
@@ -345,6 +346,15 @@ function loadAreas() {
                             <input value="${
                                 area.min ?? ""
                             }" type="text" id="new-area-min" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Текущее базовое время доставки (минут)</label>
+                            <input value="${
+                                area.delivery_minutes ?? ""
+                            }" type="text" id="new-area-delivery-minutes" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            <label style="font-weight:bold; display:block;">Базовое время доставки после сброса (минут)</label>
+                            <input value="${
+                                area.default_delivery_minutes ?? ""
+                            }" type="text" id="new-area-default-delivery-minutes" placeholder="0" style="width:100%; padding:5px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc;">
+                            </input>
 
                             <div class="form-floating">
                                 <select class="form-select" id="spotSelect-${
@@ -559,7 +569,7 @@ function saveAddress(id) {
     let buildings = document.getElementById(`buildings-${id}`).value;
 
     $.request("onSaveAddress", {
-        data: { id, name_ua, name_ru, suburb_ua, suburb_ru, buildings},
+        data: { id, name_ua, name_ru, suburb_ua, suburb_ru, buildings },
         success: function () {
             alert("Збережено");
             layerGroup.clearLayers();
@@ -572,9 +582,13 @@ function updateArea(id) {
     let desc = document.getElementById("new-area-desc").value;
     let color = document.getElementById("new-area-color").value;
     let min_amount = document.getElementById("new-area-min-amount").value;
-    let delivery_price = document.getElementById("new-area-delivery-price").value;
+    let delivery_price = document.getElementById(
+        "new-area-delivery-price",
+    ).value;
     let spot_id = document.getElementById(`spotSelect-${id}`).value;
     let min = document.getElementById(`new-area-min`).value;
+    let delivery_minutes = document.getElementById(`new-area-delivery-minutes`).value;
+    let default_delivery_minutes = document.getElementById(`new-area-default-delivery-minutes`).value;
 
     $.request("onSaveArea", {
         data: {
@@ -585,6 +599,8 @@ function updateArea(id) {
             min_amount,
             delivery_price,
             min,
+            delivery_minutes,
+            default_delivery_minutes,
             ...(spot_id !== "" && { spot_id: spot_id }),
         },
         success: function () {
@@ -611,7 +627,7 @@ $(document).on("render", function () {
     if (!mapContainer) return;
     map = L.map("address-map", { layers: [layerGroup] }).setView(
         [46.44685, 30.737],
-        9
+        9,
     );
     map.addControl(new addAddressControl());
     map.addControl(new selectAreaControl());
