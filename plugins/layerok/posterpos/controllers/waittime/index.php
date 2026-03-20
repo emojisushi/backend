@@ -1,8 +1,3 @@
-<?php if (session('success')): ?>
-    <div style="color: green; margin-bottom: 15px;">
-        <?= session('success') ?>
-    </div>
-<?php endif; ?>
 <?php function formatMinutes($minutes, $text)
 {
 
@@ -29,8 +24,8 @@
     <form method="POST" action="/backend/layerok/posterpos/waittime/save">
         <?= csrf_field() ?>
         <?php foreach ($spots as $spot): ?>
-            <div style="margin-bottom: 15px; display: flex; align-items:center;gap:8px">
-                <label>
+            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                    <label style="width: 180px; min-width: 180px; font-weight: 500;">
                     <?= $spot->name ?>
                 </label>
 

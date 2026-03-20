@@ -28,7 +28,6 @@ class WaitTime extends Controller
             'default_wait_minutes_spot',
             'default_wait_minutes_delivery'
         )->get();
-
     }
 
     public function save()
@@ -47,9 +46,9 @@ class WaitTime extends Controller
             $spot->default_wait_minutes_spot = (int) ($data['default_wait_minutes_spot'] ?? 0);
             $spot->default_wait_minutes_delivery = (int) ($data['default_wait_minutes_delivery'] ?? 0);
             $spot->save();
-
         }
 
-        return redirect()->back()->with('success', 'Дані збережено');
+        \Flash::success('Дані збережено');
+        return \Backend::redirect('layerok/posterpos/waittime');
     }
 }
