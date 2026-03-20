@@ -3,7 +3,7 @@
         <?= session('success') ?>
     </div>
 <?php endif; ?>
-<? function formatMinutes($minutes, $text)
+<?php function formatMinutes($minutes, $text)
 {
 
     $hours = floor($minutes / 60);
