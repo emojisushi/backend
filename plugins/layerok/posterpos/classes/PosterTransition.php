@@ -25,7 +25,25 @@ class PosterTransition
 {
     const EMOJI_BAR_ACCOUNT_NAME = 'emoji-bar2';
     // const EMOJI_BAR_ACCOUNT_NAME = 'demo';
+    public function generateDescription($ingredients)
+    {
+        $specialIngredients = ['васабі', 'імбир', 'соєвий соус'];
 
+        return implode(
+            ', ',
+            array_filter(array_map(function ($item) use ($specialIngredients) {
+                if (!isset($item->ingredient_name)) {
+                    return null;
+                }
+
+                if (in_array(mb_strtolower($item->ingredient_name), $specialIngredients)) {
+                    return $item->ingredient_name . ' - ' . $item->structure_brutto . ' грам';
+                }
+
+                return $item->ingredient_name;
+            }, $ingredients))
+        );
+    }
     public function findProductByPosterId($poster_id, $poster_account)
     {
         return Product::whereHas('poster_accounts', function ($query) use ($poster_account, $poster_id) {
@@ -72,10 +90,7 @@ class PosterTransition
             'published' => (int)$value->hidden === 0 ? 1 : 0,
             'stock' => 9999999,
             'inventory_management_method' => 'single',
-            'description_short' => implode(
-                ', ',
-                array_filter(array_map(fn($item) => $item->ingredient_name ?? null, $value->ingredients))
-            )
+            'description_short' => $this->generateDescription($value->ingredients)
         ]);
 
         $product->poster_accounts()->sync([
@@ -311,10 +326,7 @@ class PosterTransition
         $product->update([
             'name' => (string)$value->product_name,
             'weight'  => (int)$value->out,
-            'description_short' => implode(
-                ', ',
-                array_filter(array_map(fn($item) => $item->ingredient_name ?? null, $value->ingredients))
-            )
+            'description_short' => $this->generateDescription($value->ingredients),
             /*'published' => (int)$value->spots[0]->visible,*/
         ]);
 
