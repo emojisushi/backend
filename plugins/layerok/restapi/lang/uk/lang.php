@@ -25,6 +25,8 @@ return [
         'order_items' => 'Замовлені товари',
         'delivery_method' => 'Спосіб доставки',
         'delivery_price' => 'Вартість доставки',
+        'delivery_minutes' => 'Час доставки',
+        'spot_minutes' => 'Час приготування',
         'payment_method' => 'Спосіб оплаты',
         'sticks_name' => 'Палички для суші',
         'target' => 'Джерело замовлення',
