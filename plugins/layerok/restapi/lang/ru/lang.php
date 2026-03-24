@@ -26,6 +26,8 @@ return [
         'delivery_method' => 'Способ доставки',
         'payment_method' => 'Способ оплаты',
         'delivery_price' => 'Стоимость доставки',
+        'delivery_minutes' => 'Время доставки',
+        'spot_minutes' => 'Время приготовления',
         'sticks_name' => 'Палочки для суши',
         'target' => 'Источник заказа',
         'persons_amount' => 'Количество персон',
