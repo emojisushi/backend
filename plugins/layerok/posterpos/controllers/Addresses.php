@@ -7,6 +7,8 @@ use Backend\Classes\Controller;
 use Illuminate\Http\JsonResponse;
 use Layerok\PosterPos\Models\AddressSettings;
 use Layerok\PosterPos\Models\Spot;
+use OFFLINE\Mall\Models\Product;
+
 use ApplicationException;
 
 /**
@@ -179,6 +181,21 @@ class Addresses extends Controller
         if (post('min') !== null) {
             $data['min'] = post('min');
         }
+        if (post('delivery_minutes') !== null) {
+            if (post('delivery_minutes') === '') {
+                $data['delivery_minutes'] = 0;
+            } else {
+                $data['delivery_minutes'] = post('delivery_minutes');
+            }
+        }
+        if (post('default_delivery_minutes') !== null) {
+            if (post('default_delivery_minutes') === '') {
+                $data['default_delivery_minutes'] = 0;
+            } else {
+                $data['default_delivery_minutes'] = post('default_delivery_minutes');
+            }
+        }
+
         if ($id) {
             $area = \Layerok\PosterPos\Models\Area::find($id);
             if ($area) {
@@ -236,11 +253,24 @@ class Addresses extends Controller
             return ['addresses' => []];
         }
 
-        $spots = \Layerok\PosterPos\Models\Spot::where('city_id', $city->id)->get();
-        $spotMap = $spots->pluck('name', 'id')->toArray();
+        $spots = Spot::with('unavailable_categories', 'unavailable_products', 'recommended_products')
+            ->where('city_id', $city->id)
+            ->get();
+        $spotMap = $spots->mapWithKeys(function ($spot) {
+            return [
+                $spot->id => [
+                    'name' => $spot->name,
+                    'unavailable_categories' => $spot->unavailable_categories->pluck('id')->toArray(),
+                    'unavailable_products' => $spot->unavailable_products->pluck('id')->toArray(),
+                    'recommended_products' => $spot->recommended_products->pluck('id')->toArray(),
+                    'wait_minutes_delivery' => $spot->wait_minutes_delivery
+                ],
+            ];
+        });
+
 
         $availableSpotIds = $spots
-            ->where('temporarily_unavailable', false)
+            // ->where('temporarily_unavailable', false) // показывать улицу даже если спот закрыт
             ->pluck('id');
 
         $areas = \Layerok\PosterPos\Models\Area::whereIn('spot_id', $availableSpotIds)
@@ -252,6 +282,7 @@ class Addresses extends Controller
                     'min_amount' => $area->min_amount,
                     'delivery_price' => $area->delivery_price,
                     'min' => $area->min,
+                    'delivery_minutes' => $area->delivery_minutes,
                 ];
             });
 
@@ -269,15 +300,25 @@ class Addresses extends Controller
         $result = $addresses->map(function ($address) use ($areas, $spotMap) {
             $spotId = null;
             $spotName = null;
+            $unavailableCategories = null;
+            $unavailableProducts = null;
+            $recommendedProducts = null;
             $min_amount = null;
             $delivery_price = null;
             $min = null;
+            $wait_minutes_delivery = 0;
             foreach ($areas as $area) {
                 if ($this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
                     $min_amount = $area['min_amount'];
                     $delivery_price = $area['delivery_price'];
                     $spotId = $area['spot_id'];
-                    $spotName = $spotMap[$spotId] ?? null;
+                    $spotName = $spotMap[$spotId]['name'] ?? null;
+                    $unavailableCategories = $spotMap[$spotId]['unavailable_categories'] ?? null;
+                    $unavailableProducts = $spotMap[$spotId]['unavailable_products'] ?? null;
+                    $recommendedProducts = $spotMap[$spotId]['recommended_products'] ?? null;
+                    $wait_minutes_delivery += $spotMap[$spotId]['wait_minutes_delivery'] ?? 0;
+                    $wait_minutes_delivery += $area['delivery_minutes'] ?? 0;
+
                     $min = $area['min'];
                     break;
                 }
@@ -303,6 +344,10 @@ class Addresses extends Controller
                 'min_amount' => $min_amount,
                 'delivery_price' => $delivery_price,
                 'min' => $min,
+                'unavailable_categories' => $unavailableCategories,
+                'unavailable_products' => $unavailableProducts,
+                'recommended_products' => $recommendedProducts,
+                'wait_minutes_delivery' => $wait_minutes_delivery
             ];
         })->filter();
 

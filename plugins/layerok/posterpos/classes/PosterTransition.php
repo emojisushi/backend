@@ -24,8 +24,28 @@ use System\Models\File;
 class PosterTransition
 {
     const EMOJI_BAR_ACCOUNT_NAME = 'emoji-bar2';
+    // const EMOJI_BAR_ACCOUNT_NAME = 'demo';
+    public function generateDescription($ingredients)
+    {
+        $specialIngredients = ['васабі', 'імбир', 'соєвий соус'];
 
-    public function findProductByPosterId($poster_id, $poster_account) {
+        return implode(
+            ', ',
+            array_filter(array_map(function ($item) use ($specialIngredients) {
+                if (!isset($item->ingredient_name)) {
+                    return null;
+                }
+
+                if (in_array(mb_strtolower($item->ingredient_name), $specialIngredients)) {
+                    return $item->ingredient_name . ' - ' . $item->structure_brutto . ' грам';
+                }
+
+                return $item->ingredient_name;
+            }, $ingredients))
+        );
+    }
+    public function findProductByPosterId($poster_id, $poster_account)
+    {
         return Product::whereHas('poster_accounts', function ($query) use ($poster_account, $poster_id) {
             $query->where([
                 ['poster_id', $poster_id],
@@ -33,7 +53,8 @@ class PosterTransition
             ]);
         })->first();
     }
-    public function findCategoryByPosterId($poster_id, $poster_account) {
+    public function findCategoryByPosterId($poster_id, $poster_account)
+    {
         return Category::whereHas('poster_accounts', function ($query) use ($poster_account, $poster_id) {
             $query->where([
                 ['poster_id', $poster_id],
@@ -41,7 +62,8 @@ class PosterTransition
             ]);
         })->first();
     }
-    public function findPropertyByPosterId($poster_id, $poster_account) {
+    public function findPropertyByPosterId($poster_id, $poster_account)
+    {
         return Property::whereHas('poster_accounts', function ($query) use ($poster_account, $poster_id) {
             $query->where([
                 ['poster_id', $poster_id],
@@ -49,7 +71,8 @@ class PosterTransition
             ]);
         })->first();
     }
-    public function createProduct($value) {
+    public function createProduct($value)
+    {
         $emojibar = PosterAccount::where('account_name', self::EMOJI_BAR_ACCOUNT_NAME)->first();
         $product = $this->findProductByPosterId($value->product_id, $emojibar);
 
@@ -62,11 +85,12 @@ class PosterTransition
             'name' => (string)$value->product_name,
             'slug' => str_slug($value->product_name),
             'user_defined_id' => (int)$value->product_id,
-            'weight'  => isset($value->out) ? (int)$value->out: 0,
+            'weight'  => isset($value->out) ? (int)$value->out : 0,
             'allow_out_of_stock_purchases' => 1,
-            'published' => (int)$value->hidden === 0 ? 1: 0,
+            'published' => (int)$value->hidden === 0 ? 1 : 0,
             'stock' => 9999999,
-            'inventory_management_method' => 'single'
+            'inventory_management_method' => 'single',
+            'description_short' => $this->generateDescription($value->ingredients)
         ]);
 
         $product->poster_accounts()->sync([
@@ -75,25 +99,25 @@ class PosterTransition
             ]
         ]);
 
-        if(isset($value->spots)) {
-            foreach($value->spots as $spot) {
-//                $spotModel = Spot::where('poster_id', $spot->spot_id)->first();
-//                if(!$spotModel) {
-//                    continue;
-//                }
-//                if(!(int)$spot->visible) {
-//                    HideProduct::create([
-//                        'spot_id' => $spotModel->id,
-//                        'product_id' => $product->id
-//                    ]);
-//                    $product->published = 0;
-//                    $product->save();
-//                } else {
-//                    HideProduct::where([
-//                        'spot_id' => $spotModel->id,
-//                        'product_id' => $product->id
-//                    ])->delete();
-//                }
+        if (isset($value->spots)) {
+            foreach ($value->spots as $spot) {
+                //                $spotModel = Spot::where('poster_id', $spot->spot_id)->first();
+                //                if(!$spotModel) {
+                //                    continue;
+                //                }
+                //                if(!(int)$spot->visible) {
+                //                    HideProduct::create([
+                //                        'spot_id' => $spotModel->id,
+                //                        'product_id' => $product->id
+                //                    ]);
+                //                    $product->published = 0;
+                //                    $product->save();
+                //                } else {
+                //                    HideProduct::where([
+                //                        'spot_id' => $spotModel->id,
+                //                        'product_id' => $product->id
+                //                    ])->delete();
+                //                }
             }
         }
 
@@ -114,7 +138,7 @@ class PosterTransition
 
         $currency = Currency::where('code', '=', 'UAH')->first();
 
-        if(!$currency) {
+        if (!$currency) {
             // Если не существует гривневой валюты, то создаем
             \Artisan::call('poster:create-uah-currency');
             $currency = Currency::where('code', '=', 'UAH')->first();
@@ -124,9 +148,9 @@ class PosterTransition
         // Добавим цену товару
         // Нужно учесть две ситуации, когда мы имеем дела с товаров и когда с тех картой
         if (isset($value->modifications)) {
-           $group = PropertyGroup::create([
-               "name" =>'Модификаторы для товара ' . $value->product_name
-           ]);
+            $group = PropertyGroup::create([
+                "name" => 'Модификаторы для товара ' . $value->product_name
+            ]);
             // Товар
             $product->inventory_management_method = 'variant';
             $product->save();
@@ -175,7 +199,6 @@ class PosterTransition
                     'property_id' => $property['id'],
                     'value' => $mod->modificator_name
                 ]);
-
             }
 
             $property->options = $options;
@@ -193,9 +216,8 @@ class PosterTransition
             $mod_category->property_groups()->attach($group['id']);
 
             // Привяжем свойство к группе свойств модификаторов
-            $property->property_groups()->attach($group->id, ['use_for_variants' => 1, 'filter_type'=>'set']);
-        }
-        else {
+            $property->property_groups()->attach($group->id, ['use_for_variants' => 1, 'filter_type' => 'set']);
+        } else {
             // Тех. карта
             ProductPrice::create([
                 'price' => (int)substr($value->price->{'1'}, 0, -2),
@@ -210,8 +232,8 @@ class PosterTransition
 
                     $name = $i->ingredient_name;
 
-                    if(!$property) {
-                        $group = PropertyGroup::where('name', 'unknown_ingredient_group')->first();//must be created already
+                    if (!$property) {
+                        $group = PropertyGroup::where('name', 'unknown_ingredient_group')->first(); //must be created already
 
                         $property = Property::create([
                             'type' => 'checkbox',
@@ -224,10 +246,9 @@ class PosterTransition
                             ]
                         ]);
 
-                        $property->property_groups()->attach($group->id, ['use_for_variants' => 0, 'filter_type'=>'set']);
+                        $property->property_groups()->attach($group->id, ['use_for_variants' => 0, 'filter_type' => 'set']);
                         $category->property_groups()->detach($group->id);
                         $category->property_groups()->attach($group->id);
-
                     }
 
                     PropertyValue::create([
@@ -235,14 +256,13 @@ class PosterTransition
                         'property_id' => $property->id,
                         'value' => $name
                     ]);
-
                 }
 
                 $product->save();
             }
         }
 
-/*        if (!empty($value->photo)) {
+        /*        if (!empty($value->photo)) {
             try {
                 $url = env('POSTER_URL') . (string)$value->photo;
 
@@ -304,8 +324,9 @@ class PosterTransition
         }
 
         $product->update([
-            /*'name' => (string)$value->product_name,*/
+            'name' => (string)$value->product_name,
             'weight'  => (int)$value->out,
+            'description_short' => $this->generateDescription($value->ingredients),
             /*'published' => (int)$value->spots[0]->visible,*/
         ]);
 
@@ -325,8 +346,7 @@ class PosterTransition
         // Нужно учесть две ситуации, когда мы имеем дела с товаров и когда с тех картой
         if (isset($value->modifications)) {
             //todo обновление товара
-        }
-        else {
+        } else {
             // Тех. карта
             $price = ProductPrice::where('product_id', '=', $product['id'])->first();
             if ($price) {
@@ -334,11 +354,10 @@ class PosterTransition
                     'price' => (int)substr($value->price->{'1'}, 0, -2),
                 ]);
             }
-
         }
 
 
-/*        $image_sets = ImageSet::where('product_id', '=', $product['id'])->get();
+        /*        $image_sets = ImageSet::where('product_id', '=', $product['id'])->get();
         if ($image_sets) {
             $files = File::whereIn('attachment_id', $image_sets->pluck('id'))->get();
             if ($files) {
@@ -352,7 +371,7 @@ class PosterTransition
 
         }*/
 
-/*        if (!empty($value->photo)) {
+        /*        if (!empty($value->photo)) {
 
             $url = env('POSTER_URL') . (string)$value->photo;
 

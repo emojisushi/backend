@@ -35,3 +35,12 @@
 1.0.21:
     - 'Add sms_confirmations table'
     - add_sms_confirmations_table.php
+1.0.22:
+    - 'Add delivery_minutes to areas table'
+    - add_delivery_minutes_to_areas_table.php
+1.0.23:
+    - 'Add default_delivery_minutes to areas table'
+    - add_default_delivery_minutes_to_areas_table.php
+1.0.24:
+    - 'Add delivery_minutes to online_orders table'
+    - add_delivery_minutes_to_online_orders_table.php

@@ -9,11 +9,7 @@ use October\Rain\Database\Traits\Sluggable;
 use OFFLINE\Mall\Models\Category;
 use OFFLINE\Mall\Models\Product;
 
-/**
- * @property Tablet|null $tablet
- * @property int $temporarily_unavailable
- */
-class Spot extends Model
+class RecommendedItem extends Model
 {
     use Sluggable;
 
@@ -44,8 +40,6 @@ class Spot extends Model
         'merchant_account',
         'merchant_secret_key',
         'domain_name',
-        'wait_minutes_spot',
-        'wait_minutes_delivery',
     ];
     protected $hidden = ['merchant_account', 'merchant_secret_key'];
 
@@ -82,12 +76,6 @@ class Spot extends Model
             Product::class,
             'table' => 'layerok_posterpos_unavailable_products_in_spot',
             'key' => 'spot_id',
-            'otherKey' => 'product_id',
-        ],
-        'recommended_products' => [
-            Product::class,
-            'table' => 'layerok_posterpos_recommended_products_in_spot',
-            'key'      => 'spot_id',
             'otherKey' => 'product_id',
         ],
     ];

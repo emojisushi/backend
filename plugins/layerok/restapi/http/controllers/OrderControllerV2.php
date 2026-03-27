@@ -73,6 +73,7 @@ class OrderControllerV2 extends Controller
         $address = null;
         $mode = ServiceMode::ON_SITE;
         $area = null;
+        $delivery_time = $spot->wait_minutes_spot ?? 0; //if takeaway
         if ($shippingMethod->code === ShippingMethodCode::COURIER) {
             $spotId = null;
             $mode = ServiceMode::COURIER;
@@ -88,11 +89,13 @@ class OrderControllerV2 extends Controller
                         )
                     ) {
                         $area = $lArea;
+                        
                         $spotId = $lArea['spot_id'];
                         break;
                     }
                 }
                 $spot = Spot::find($spotId);
+                $delivery_time = $spot->wait_minutes_delivery + $area["delivery_minutes"];
                 // $incomingOrder['spot_id'] = $spot->tablet->tablet_id;
                 $address = $address->name_ua . ', ' . $address->suburb_ua . ', ' . $data['address_details'] ?? null;
                 $data['address'] = $address;
@@ -188,10 +191,14 @@ class OrderControllerV2 extends Controller
             'last_name' => $data['lastname'] ?? null,
             'service_mode' => $mode,
             'address' => $address,
+            'delivery_minutes' => $delivery_time ?? null
         ];
 
+        $data['spot_minutes'] = $delivery_time;
         $courier_fee = null;
         if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
+            $data['spot_minutes'] = null;
+            $data['delivery_minutes'] = $delivery_time;
             if ($total / 100 < $area->min) {
                 return response()->json(['message' => 'Error', 'errors' => ['area_min' => ["Area min is $area->min"]]], 400);
             }
@@ -292,7 +299,7 @@ class OrderControllerV2 extends Controller
                 ->setMerchantDomainName($domainName)
                 ->setClient($client)
                 ->setProducts(new ProductCollection($products))
-                ->setReturnUrl(WayforpaySettings::get('return_url') . "?order_id=$order_id")
+                ->setReturnUrl(WayforpaySettings::get('return_url') . "?order_id=$order_id&wait_time=$delivery_time")
                 ->setServiceUrl(WayforpaySettings::get('service_url') . "?spot_id=$spot->id")
                 ->setLanguage(WayforpaySettings::get('language'))
                 ->setOrderLifetime(600)
@@ -562,6 +569,14 @@ class OrderControllerV2 extends Controller
                 trans('layerok.restapi::lang.receipt.delivery_price'),
                 htmlspecialchars($data['delivery_price_uah'] ?? null)
             )
+            ->field(
+                trans('layerok.restapi::lang.receipt.delivery_minutes'),
+                htmlspecialchars(self::formatMinutes($data['delivery_minutes'] ?? null))
+            )
+            ->field(
+                trans('layerok.restapi::lang.receipt.spot_minutes'),
+                htmlspecialchars(self::formatMinutes($data['spot_minutes'] ?? null))
+            )
             ->newLine()
             ->b(trans('layerok.restapi::lang.receipt.order_items'))
             ->colon()
@@ -581,7 +596,25 @@ class OrderControllerV2 extends Controller
 
         return $receipt->getText();
     }
+    public static function formatMinutes($minutes)
+    {
 
+        $hours = floor($minutes / 60);
+        $mins = $minutes % 60;
+
+        if ($minutes == 0) return null;
+
+        $result = '';
+
+        if ($hours > 0) {
+            $result .= $hours . ' год';
+        }
+
+        if ($mins > 0) {
+            $result .= ($hours ? ' ' : '') . $mins . ' хв';
+        };
+        return $result;
+    }
     public function isDebugOn()
     {
         return !!request()->header('x-debug-mode');
@@ -661,7 +694,8 @@ class OrderControllerV2 extends Controller
             'total'             => $total,
             'cart'              => json_encode($cart),
             'real_spot_id'      => $real_spot_id,
-            'delivery_price'    => $data['delivery_price']
+            'delivery_price'    => $data['delivery_price'],
+            'delivery_minutes'  => $data['delivery_minutes']
         ];
 
         // Create and return the order
