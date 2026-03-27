@@ -10,7 +10,7 @@ class AppVersionSettings extends Model
 {
     public $implement = [\System\Behaviors\SettingsModel::class];
     public $settingsCode = 'layerok_restapi_app_version_settings';
-    public $settingsFields = 'plugins/layerok/restapi/models/settings/app_version_fields.yaml';
+    public $settingsFields = '$/layerok/restapi/models/settings/app_version_fields.yaml';
     public $rules = [
         'android_version' => 'required|string',
         'ios_version' => 'required|string',
