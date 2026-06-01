@@ -64,7 +64,7 @@ class SmsController extends Controller
     public function generateCodeMobile(Request $request)
     {
         $phone = $request->input('phone');
-        $hash = config('sms.mobile_hash_dev');
+        $hash = config('sms.mobile_hash_rel');
 
         $code = random_int(100000, 999999);
 
