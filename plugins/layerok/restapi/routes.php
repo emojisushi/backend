@@ -108,6 +108,7 @@ Route::group([
 
     Route::get('/sms/check-phone', [SmsController::class, 'checkPhone']);
     Route::post('/sms/generate-code', [SmsController::class, 'generateCode']);
+    Route::post('/sms/generate-code-mobile', [SmsController::class, 'generateCodeMobile']);
     Route::post('/sms/check-code', [SmsController::class, 'checkCode']);
 
     Route::post('/log', function () {
