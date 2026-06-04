@@ -26,7 +26,9 @@ use \Layerok\Restapi\Http\Controllers\PromotionController;
 use \Layerok\Restapi\Http\Controllers\BannerController;
 use \Layerok\Restapi\Http\Controllers\OrderControllerV2;
 use \Layerok\Restapi\Http\Controllers\SmsController;
+use \Layerok\Restapi\Http\Controllers\NotificationController;
 use \Fruitcake\Cors\HandleCors;
+use Illuminate\Database\Console\Factories\FactoryMakeCommand;
 
 Route::group([
     'middleware' => [
@@ -115,6 +117,8 @@ Route::group([
     Route::post('/sms/generate-code', [SmsController::class, 'generateCode']);
     Route::post('/sms/generate-code-mobile', [SmsController::class, 'generateCodeMobile']);
     Route::post('/sms/check-code', [SmsController::class, 'checkCode']);
+
+    Route::post('/notifications/register', [NotificationController::class, 'register']);
 
     Route::post('/log', function () {
         $content = \Illuminate\Support\Facades\Request::getContent();
