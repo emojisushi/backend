@@ -71,7 +71,10 @@ Route::group([
 
     Route::prefix('auth')->group(function () {
         Route::post('login', [AuthController::class, 'login']);
+        Route::post('login-with-phone', [AuthController::class, 'loginWithPhone']);
+        Route::post('login-with-sms', [AuthController::class, 'loginWithSMS']);
         Route::post('register', [AuthController::class, 'register']);
+        Route::post('register-with-phone', [AuthController::class, 'registerWithPhone']);
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
         Route::post('restore-password', [AuthController::class, 'restorePassword']);
 
@@ -97,6 +100,8 @@ Route::group([
         Route::get('user', [UserController::class, 'fetch']);
         Route::post('user', [UserController::class, 'save']);
         Route::post('user/password', [UserController::class, 'updatePassword']);
+        Route::get('user/orders', [UserController::class, 'orders']);
+        Route::get('user/order/{id}', [UserController::class, 'order']);
         Route::get('user/addresses', [UserController::class, 'addresses']);
         Route::post('user/address', [UserController::class, 'createAddress']);
         Route::delete('user/address', [UserController::class, 'deleteAddress']);
