@@ -1,4 +1,5 @@
 <?php
+
 namespace Layerok\RestApi;
 
 use Layerok\Restapi\Classes\Sort\Category;
@@ -30,15 +31,30 @@ class Plugin extends PluginBase
         ];
     }
 
-    public function register()
-    {
-
-    }
+    public function register() {}
 
     public function boot()
     {
         User::extend(function ($model) {
             $model->addFillable(['bonuses']);
+
+            $model->rules = [
+                'avatar'   => 'nullable|image|max:4000',
+                'username' => 'required|between:2,255|unique:users',
+                'password' => 'required:create|between:8,255|confirmed',
+                'password_confirmation' => 'required_with:password|between:8,255',
+
+                'email' => 'nullable|email|between:2,255|unique:users,email,NULL,id,deleted_at,NULL',
+                'phone' => 'nullable|between:6,255|unique:users,phone,NULL,id,deleted_at,NULL',
+            ];
+
+            $model->bindEvent('model.beforeValidate', function () use ($model) {
+                if (empty($model->email) && empty($model->phone)) {
+                    throw new \ValidationException([
+                        'email' => 'Either email or phone is required.',
+                    ]);
+                }
+            });
         });
         Event::listen('offline.mall.extendSortOrder', function () {
             return [

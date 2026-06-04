@@ -36,6 +36,8 @@ use Maksa988\WayForPay\Domain\Client;
 use Maksa988\WayForPay\Facades\WayForPay;
 use Layerok\PosterPos\Models\WayforpaySettings;
 use WayForPay\SDK\Credential\AccountSecretCredential;
+use Illuminate\Support\Facades\Http;
+use WayForPay\SDK\Helper\SignatureHelper;
 
 class OrderControllerV2 extends Controller
 {
@@ -71,6 +73,7 @@ class OrderControllerV2 extends Controller
 
         $shippingMethod = ShippingMethod::where('id', $data['shipping_method_id'])->first();
         $address = null;
+        $address_id = $data['address'] ?? null;
         $mode = ServiceMode::ON_SITE;
         $area = null;
         $delivery_time = $spot->wait_minutes_spot ?? 0; //if takeaway
@@ -89,7 +92,7 @@ class OrderControllerV2 extends Controller
                         )
                     ) {
                         $area = $lArea;
-                        
+
                         $spotId = $lArea['spot_id'];
                         break;
                     }
@@ -197,6 +200,21 @@ class OrderControllerV2 extends Controller
         $data['spot_minutes'] = $delivery_time;
         $courier_fee = null;
         if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
+            try {
+                if ($user) {
+                    $user->fill([
+                        'house_type' => $data['house_type'] ?? null,
+                        'house'     => $data['house'],
+                        'floor'    => $data['floor'] ?? null,
+                        'apartment' => $data['apartment'] ?? null,
+                        'entrance'      => $data['entrance'] ?? null,
+                        'street' => $address_id ?? null,
+                    ]);
+                    $user->save();
+                }
+            } catch (\Exception $e) {
+            }
+
             $data['spot_minutes'] = null;
             $data['delivery_minutes'] = $delivery_time;
             if ($total / 100 < $area->min) {
@@ -290,6 +308,68 @@ class OrderControllerV2 extends Controller
                     $courier_fee,
                     1
                 );
+            }
+            if (isset($data['mobile']) && $data['mobile']) {
+
+                $productNames = ["Замовлення: #$order_id"];
+                $productPrices = [$way_total];
+                $productCounts = [1];
+
+                if ($courier_fee != null && $courier_fee > 0) {
+                    $productNames[] = "Доставка";
+                    $productPrices[] = $courier_fee;
+                    $productCounts[] = 1;
+                }
+
+                $orderDate = time();
+                $fields = [
+                    $merchantAccount,
+                    $domainName,
+                    $wayforpay_id,
+                    $orderDate,
+                    $way_total + $courier_fee,
+                    WayforpaySettings::get('currency'),
+                    $productNames,
+                    $productCounts,
+                    $productPrices,
+                ];
+                $merchantSignature = SignatureHelper::calculateSignature(
+                    $fields,
+                    $merchantSecretKey
+                );
+                $data = [
+                    "merchantAccount" => $merchantAccount,
+                    "merchantDomainName" => $domainName,
+                    "merchantSignature" => $merchantSignature,
+                    "orderReference" => $wayforpay_id,
+                    "orderDate" => $orderDate,
+                    "amount" => $way_total + $courier_fee,
+                    "currency" => WayforpaySettings::get('currency'),
+                    "productName" => $productNames,
+                    "productPrice" => $productPrices,
+                    "productCount" => $productCounts,
+                    "clientPhone" => $data['phone'] ?? null,
+                    "clientEmail" => $data['email'] ?? null,
+                    "clientFirstName" => $data['first_name'] ?? null,
+                    "clientLastName" => $data['last_name'] ?? null,
+                    "returnUrl" => WayforpaySettings::get('return_url') . "?order_id=$wayforpay_id&wait_time=$delivery_time&mobile=true",
+                    "serviceUrl" => WayforpaySettings::get('service_url') . "?spot_id=$spot->id",
+                    "language" => WayforpaySettings::get('language'),
+                    "orderLifetime" => 600,
+                    "orderTimeout" => 600,
+                ];
+
+                $response = Http::asForm()->post(
+                    "https://secure.wayforpay.com/pay?behavior=offline",
+                    $data
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'res' => $response->json(),
+                    'poster_order' => $order_id,
+                    'wayforpay_order' => $wayforpay_id
+                ]);
             }
             $form = PurchaseWizard::get($credential)
                 ->setOrderReference($wayforpay_id)

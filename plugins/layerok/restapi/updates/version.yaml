@@ -44,3 +44,7 @@
 1.0.24:
     - 'Add delivery_minutes to online_orders table'
     - add_delivery_minutes_to_online_orders_table.php
+
+1.0.25:
+    - 'Add fcm_tokens table'
+    - add_fcm_tokens_table.php

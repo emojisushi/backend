@@ -169,6 +169,43 @@ class WayForPayController
         if ($waitTime !== null) {
             $params['wait_time'] = $waitTime;
         }
+        $mobile = request()->query('mobile');
+
+        if ($mobile !== null) {
+            $orderId = request()->query('order_id');
+            $deepLink = "emojisushi://payment?orderId={$orderId}&wait_time={$waitTime}";
+
+            return response()->make("
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Оплата</title>
+            </head>
+
+            <body style='display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center; background-color: #141414;'>
+
+            <div>
+            <button onclick='openApp()' style='background-color: #FFE600;padding: 24px;border-radius: 10px;font-size:16px; border: none;'>
+                Повернутися до дoдатку для перегляду замовлення
+            </button>
+            </div>
+
+            <script>
+            const deepLink = '{$deepLink}';
+            function openApp() {
+                window.location.href = deepLink;
+            }
+
+            setTimeout(() => {
+                window.location.href = deepLink;
+            }, 1500);
+            </script>
+
+            </body>
+            </html>
+            ");
+        }
         $baseUrl = WayforpaySettings::get('status_url');
         return Redirect::to($baseUrl . '?' . http_build_query($params));
     }

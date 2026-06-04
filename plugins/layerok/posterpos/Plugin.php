@@ -520,6 +520,11 @@ class Plugin extends PluginBase
                         'label' => 'Diagnostics',
                         'icon' => 'icon-cog',
                         'url' => Backend::url('layerok/posterpos/diagnostics')
+                    ],
+                    'posterpos-notifications' => [
+                        'label' => 'Notifications',
+                        'icon' => 'icon-bell',
+                        'url' => Backend::url('layerok/posterpos/notification')
                     ]
                 ]
             ],

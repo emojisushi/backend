@@ -13,17 +13,22 @@ class SmsController extends Controller
     {
         $phone = $request->input('phone');
 
-        $confirmation = SmsConfirmation::where('phone', $phone)->first();
+        $sanitized = preg_replace('/\D/', '', $phone); // strip all non-digits
+
+        $confirmation = SmsConfirmation::whereRaw(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') = ?",
+            [$sanitized]
+        )->first();
 
         if (!$confirmation) {
             return response()->json([
                 'confirmed' => false,
-                'message' => 'Phone number not found.'
+                'message'   => 'Phone number not found.',
             ], 404);
         }
 
         return response()->json([
-            'confirmed' => (bool) $confirmation->confirmed
+            'confirmed' => (bool) $confirmation->confirmed,
         ]);
     }
 
@@ -56,6 +61,37 @@ class SmsController extends Controller
             'to' => $phoneSanitaized,
             'priority' => 3,
             'message' => "Vash kod: {$code}\n\n@$domain #$code",
+        ]);
+
+        return true;
+    }
+
+    public function generateCodeMobile(Request $request)
+    {
+        $phone = $request->input('phone');
+        $hash = config('sms.mobile_hash_rel');
+
+        $code = random_int(100000, 999999);
+
+
+        $confirmation = SmsConfirmation::updateOrCreate(
+            ['phone' => $phone],
+            ['last_code' => $code, 'confirmed' => false]
+        );
+
+        $username = config('sms.inteltele_username');
+        $apiKey = config('sms.inteltele_api_key');
+        $sender = config('sms.inteltele_sender');
+        $phoneSanitaized = preg_replace('/[^0-9]/', '', $phone); // sanitize
+        $url = 'http://api.sms.intel-tele.com/message/send/';
+
+        $response = Http::asForm()->get($url, [
+            'username' => $username,
+            'api_key' => $apiKey,
+            'from' => $sender,
+            'to' => $phoneSanitaized,
+            'priority' => 3,
+            'message' => "<#> Vash kod: {$code}\n{$hash}",
         ]);
 
         return true;
