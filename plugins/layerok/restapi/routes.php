@@ -26,7 +26,9 @@ use \Layerok\Restapi\Http\Controllers\PromotionController;
 use \Layerok\Restapi\Http\Controllers\BannerController;
 use \Layerok\Restapi\Http\Controllers\OrderControllerV2;
 use \Layerok\Restapi\Http\Controllers\SmsController;
+use \Layerok\Restapi\Http\Controllers\NotificationController;
 use \Fruitcake\Cors\HandleCors;
+use Illuminate\Database\Console\Factories\FactoryMakeCommand;
 
 Route::group([
     'middleware' => [
@@ -71,7 +73,10 @@ Route::group([
 
     Route::prefix('auth')->group(function () {
         Route::post('login', [AuthController::class, 'login']);
+        Route::post('login-with-phone', [AuthController::class, 'loginWithPhone']);
+        Route::post('login-with-sms', [AuthController::class, 'loginWithSMS']);
         Route::post('register', [AuthController::class, 'register']);
+        Route::post('register-with-phone', [AuthController::class, 'registerWithPhone']);
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
         Route::post('restore-password', [AuthController::class, 'restorePassword']);
 
@@ -97,6 +102,8 @@ Route::group([
         Route::get('user', [UserController::class, 'fetch']);
         Route::post('user', [UserController::class, 'save']);
         Route::post('user/password', [UserController::class, 'updatePassword']);
+        Route::get('user/orders', [UserController::class, 'orders']);
+        Route::get('user/order/{id}', [UserController::class, 'order']);
         Route::get('user/addresses', [UserController::class, 'addresses']);
         Route::post('user/address', [UserController::class, 'createAddress']);
         Route::delete('user/address', [UserController::class, 'deleteAddress']);
@@ -110,6 +117,8 @@ Route::group([
     Route::post('/sms/generate-code', [SmsController::class, 'generateCode']);
     Route::post('/sms/generate-code-mobile', [SmsController::class, 'generateCodeMobile']);
     Route::post('/sms/check-code', [SmsController::class, 'checkCode']);
+
+    Route::post('/notifications/register', [NotificationController::class, 'register']);
 
     Route::post('/log', function () {
         $content = \Illuminate\Support\Facades\Request::getContent();

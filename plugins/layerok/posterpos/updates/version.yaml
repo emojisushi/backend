@@ -152,3 +152,11 @@
 1.2.4:
     - 'Add default_wait_minutes_spot to spots table'
     - create_default_wait_minutes_spot_in_spots_table.php
+
+1.2.5:
+    - 'Make user email nullable'
+    - make_user_email_nullable.php
+
+1.2.6:
+    - 'Add address info to users table'
+    - add_address_info_to_users_table.php

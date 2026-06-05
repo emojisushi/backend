@@ -7,6 +7,8 @@ use Illuminate\Routing\Controller;
 use Layerok\PosterPos\Models\User;
 use OFFLINE\Mall\Models\Address;
 use RainLab\Location\Models\Country;
+use poster\src\PosterApi;
+use Layerok\PosterPos\Models\OnlineOrder;
 
 class UserController extends Controller
 {
@@ -20,11 +22,87 @@ class UserController extends Controller
             'customer.orders.order_state'
         ])
             ->find($jwtGuard->user()->id);
+        // PosterApi::init(config('poster'));
+        // $response = PosterApi::clients()->getClients([
+        //     'phone' => $user->username,
+        // ]) ?? 0;
+        // $bonus = $response->response[0]->bonus ?? 0;
+        // $user->bonus_amount = $bonus;
 
         return response()->json(array_merge($user->toArray(), [
             'is_call_center_admin' => $user->isCallCenterAdmin()
         ]));
     }
+
+    public function orders(): JsonResponse
+    {
+        $jwtGuard = app('JWTGuard');
+        /** @var User $user */
+        $user = $jwtGuard->user();
+
+        PosterApi::init(config('poster'));
+
+        $client = PosterApi::clients()->getClients([
+            'phone' => $user->phone,
+        ]);
+
+        $clientId = $client->response[0]->client_id ?? null;
+
+        if (!$clientId) {
+            return response()->json([]);
+        }
+
+        $transactions = PosterApi::dash()->getTransactions([
+            'date_from' => now()->subYears(4)->format('Ymd'),
+            'date_to'   => now()->format('Ymd'),
+            'type'     => 'clients',
+            'id'       => $clientId,
+            'status'   => 2,
+        ]);
+
+        return response()->json($transactions->response ?? []);
+    }
+
+    public function order($id): JsonResponse
+{
+    $jwtGuard = app('JWTGuard');
+    /** @var User $user */
+    $user = $jwtGuard->user();
+    PosterApi::init(config('poster'));
+
+    $transaction = PosterApi::dash()->getTransaction([
+        'include_delivery' => 'true',
+        'include_products' => 'true',
+        'transaction_id' => $id,
+    ]);
+
+    $data = $transaction->response[0] ?? null;
+
+    if (!$data) {
+        return response()->json([]);
+    }
+
+    $transactionPhone = preg_replace('/\D/', '', $data->client_phone ?? '');
+    $userPhone        = preg_replace('/\D/', '', $user->phone ?? '');
+
+    if ($transactionPhone !== $userPhone) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    $address = null;
+    $dPrice = null;
+    if ($data->delivery) {
+        $address = $data->delivery->address1;
+        $dPrice = $data->delivery->delivery_price;
+    }
+
+    return response()->json([
+        'products' => $data->products ?? [],
+        'address'  => $address ?? null,
+        'delivery_price'  => $dPrice ?? null,
+        'sum'      => $data->payed_sum ?? null,
+    ]);
+}
 
     public function save()
     {
@@ -33,9 +111,9 @@ class UserController extends Controller
         $phone = input('phone');
 
         request()->validate([
-            'name' => 'required|min:2',
-            'surname' => 'required|min:2',
-            'phone' => 'nullable|phoneUa'
+            // 'name' => 'required|min:2',
+            // 'surname' => 'required|min:2',
+            // 'phone' => 'nullable|phoneUa'
         ], [
             'phone.phone_ua' => trans('layerok.posterpos::lang.validation.phone.ua')
         ]);
@@ -44,17 +122,17 @@ class UserController extends Controller
         $user = $jwtGuard->user();
         $customer = $user->customer;
 
-        if($name) {
+        if ($name) {
             $user->name = $name;
             $customer->firstname = $name;
         }
 
-        if($surname) {
+        if ($surname) {
             $user->surname = $surname;
             $customer->lastname = $surname;
         }
 
-        if($phone) {
+        if ($phone) {
             $user->phone = $phone;
         }
 
@@ -63,15 +141,16 @@ class UserController extends Controller
         return response()->json($user);
     }
 
-    public function updatePassword() {
+    public function updatePassword()
+    {
 
 
         $minPasswordLength = User::getMinPasswordLength();
 
         request()->validate([
-           'password_old' => "required",
-           'password' => "required|between:$minPasswordLength,255|confirmed",
-           'password_confirmation' => "required_with:password|between:$minPasswordLength,255"
+            'password_old' => "required",
+            'password' => "required|between:$minPasswordLength,255|confirmed",
+            'password_confirmation' => "required_with:password|between:$minPasswordLength,255"
         ]);
 
 
@@ -82,7 +161,7 @@ class UserController extends Controller
         $jwtGuard = app('JWTGuard');
         $user = $jwtGuard->user();
 
-        if($user->checkHashValue('password', $password_old)) {
+        if ($user->checkHashValue('password', $password_old)) {
             $user->password = $password;
             $user->password_confirmation = $password_confirmation;
             $user->save();
@@ -91,11 +170,10 @@ class UserController extends Controller
                 ['password_old' => \Lang::get('layerok.restapi::validation.not_correct_password')]
             );
         }
-
-
     }
 
-    public function createAddress() {
+    public function createAddress()
+    {
         request()->validate([
             'name' => 'required',
             'lines' => 'required',
@@ -121,7 +199,7 @@ class UserController extends Controller
         $shippingAddress->city       = $city;
 
         $country = Country::where('code', 'UA')->first();
-        if($country) {
+        if ($country) {
             $shippingAddress->country_id = $country->id;
         } else {
             throw new \ValidationException([
@@ -134,7 +212,8 @@ class UserController extends Controller
         return response()->json($shippingAddress);
     }
 
-    public function deleteAddress() {
+    public function deleteAddress()
+    {
         request()->validate([
             'id' => 'required|integer|exists:offline_mall_addresses'
         ]);
@@ -149,13 +228,13 @@ class UserController extends Controller
             ['id', $id],
             ['customer_id', $customer->id]
         ])->first();
-        if($address) {
+        if ($address) {
             $address->delete();
         }
-
     }
 
-    public function setDefaultAddress() {
+    public function setDefaultAddress()
+    {
         $jwtGuard = app('JWTGuard');
         $user = $jwtGuard->user();
         $customer = $user->customer;
@@ -171,7 +250,7 @@ class UserController extends Controller
             ['customer_id', $customer->id]
         ])->first();
 
-        if($address) {
+        if ($address) {
             $customer->default_shipping_address_id = $address->id;
             $customer->save();
         }

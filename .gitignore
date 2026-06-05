@@ -25,3 +25,4 @@ nbproject
 /bootstrap/compiled.php
 /vendor
 .vscode
+storage/app/firebase-service-account.json

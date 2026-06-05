@@ -13,17 +13,22 @@ class SmsController extends Controller
     {
         $phone = $request->input('phone');
 
-        $confirmation = SmsConfirmation::where('phone', $phone)->first();
+        $sanitized = preg_replace('/\D/', '', $phone); // strip all non-digits
+
+        $confirmation = SmsConfirmation::whereRaw(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') = ?",
+            [$sanitized]
+        )->first();
 
         if (!$confirmation) {
             return response()->json([
                 'confirmed' => false,
-                'message' => 'Phone number not found.'
+                'message'   => 'Phone number not found.',
             ], 404);
         }
 
         return response()->json([
-            'confirmed' => (bool) $confirmation->confirmed
+            'confirmed' => (bool) $confirmation->confirmed,
         ]);
     }
 

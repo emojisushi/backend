@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Layerok\Restapi\Http\Controllers;
@@ -7,13 +8,18 @@ use Cms\Classes\Page;
 use Layerok\PosterPos\Models\Spot;
 use Layerok\PosterPos\Models\Wishlist;
 use Layerok\Restapi\Http\Requests\RegistrationRequest;
+use Layerok\Restapi\Http\Requests\RegistrationWithPhoneRequest;
 use October\Rain\Argon\Argon;
 use October\Rain\Auth\AuthException;
 use OFFLINE\Mall\Models\Customer;
 use RainLab\User\Models\User as UserModel;
 use ReaZzon\JWTAuth\Classes\Dto\TokenDto;
 use Layerok\Restapi\Http\Requests\LoginRequest;
+use Layerok\Restapi\Http\Requests\LoginWithPhoneRequest;
+use Layerok\Restapi\Http\Requests\LoginWithSMSRequest;
 use Layerok\PosterPos\Models\Cart;
+use Illuminate\Support\Facades\Hash;
+use Layerok\PosterPos\Models\SmsConfirmation;
 
 use Lang;
 use Validator;
@@ -51,25 +57,132 @@ class AuthController extends Controller
 
         // If the user doesn't have a Customer model it was created via the backend.
         // Make sure to add the Customer model now
-        if ( ! $user->customer && ! $user->is_guest) {
-            $customer            = new Customer();
-            $customer->firstname = $user->name;
-            $customer->lastname  = $user->surname;
-            $customer->user_id   = $user->id;
-            $customer->is_guest  = false;
-            $customer->save();
+        try {
+            if (! $user->customer && ! $user->is_guest) {
+                $customer            = new Customer();
+                $customer->firstname = $user->name ?? "name";
+                $customer->lastname  = $user->surname ?? "surname";
+                $customer->user_id   = $user->id;
+                $customer->is_guest  = false;
+                $customer->save();
 
-            $user->customer = $customer;
+                $user->customer = $customer;
+            }
+
+            if ($user->customer->is_guest) {
+                $this->JWTGuard->logout();
+                throw new AuthException('offline.mall::lang.components.signup.errors.user_is_guest');
+                Cart::transferSessionCartToCustomer($user->customer);
+            }
+        } catch (\Exception $e) {
+        }
+        $tokenDto = new TokenDto([
+            'token' => $this->JWTGuard->login($user),
+            'expires' => Argon::createFromTimestamp($this->JWTGuard->getPayload()->get('exp')),
+            'user' => $user->load([
+                'customer.addresses',
+                'customer.orders.products.product.image_sets',
+                'customer.orders.order_state'
+            ]),
+        ]);
+
+        return ['data' => $tokenDto->toArray()];
+    }
+
+    /**
+     * @param LoginWithPhoneRequest $loginRequest
+     * @return array
+     * @throws \ApplicationException
+     */
+    public function loginWithPhone(LoginWithPhoneRequest $loginRequest): array
+    {
+        // $user = $this->userPluginResolver
+        //     ->getProvider()
+        //     ->authenticate($loginRequest->validated());
+
+        // if (empty($user)) {
+        //     throw new \ApplicationException('Login failed');
+        // }
+        $credentials = $loginRequest->validated();
+
+        $user = UserModel::where('phone', $credentials['phone'])->first();
+
+        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+            throw new \October\Rain\Auth\AuthException('Login failed');
         }
 
-        if ($user->customer->is_guest) {
-            $this->JWTGuard->logout();
-            throw new AuthException('offline.mall::lang.components.signup.errors.user_is_guest');
+        // If the user doesn't have a Customer model it was created via the backend.
+        // Make sure to add the Customer model now
+        try {
+            if (! $user->customer && ! $user->is_guest) {
+                $customer            = new Customer();
+                $customer->firstname = $user->name ?? "name";
+                $customer->lastname  = $user->surname ?? "surname";
+                $customer->user_id   = $user->id;
+                $customer->is_guest  = false;
+                $customer->save();
+
+                $user->customer = $customer;
+            }
+
+            if ($user->customer->is_guest) {
+                $this->JWTGuard->logout();
+                throw new AuthException('offline.mall::lang.components.signup.errors.user_is_guest');
+                Cart::transferSessionCartToCustomer($user->customer);
+            }
+        } catch (\Exception $e) {
+        }
+        $tokenDto = new TokenDto([
+            'token' => $this->JWTGuard->login($user),
+            'expires' => Argon::createFromTimestamp($this->JWTGuard->getPayload()->get('exp')),
+            'user' => $user->load([
+                'customer.addresses',
+                'customer.orders.products.product.image_sets',
+                'customer.orders.order_state'
+            ]),
+        ]);
+
+        return ['data' => $tokenDto->toArray()];
+    }
+
+    public function loginWithSMS(LoginWithSMSRequest $loginRequest): array
+    {
+        $credentials = $loginRequest->validated();
+        $confirmation = SmsConfirmation::where('phone', $credentials['phone'])->first();
+
+        if (!$confirmation) {
+            throw new \October\Rain\Auth\AuthException('Login failed');
         }
 
-        Cart::transferSessionCartToCustomer($user->customer);
+        if ($confirmation->last_code == $credentials['code']) {
+            $confirmation->confirmed = true;
+            $confirmation->save();
+        } else {
+            throw new \October\Rain\Auth\AuthException('Login failed');
+        }
+        $user = UserModel::where('phone', $credentials['phone'])->first();
 
+        // If the user doesn't have a Customer model it was created via the backend.
+        // Make sure to add the Customer model now
+        try {
+            if (! $user->customer && ! $user->is_guest) {
+                $customer            = new Customer();
+                $customer->firstname = $user->name ?? "name";
+                $customer->lastname  = $user->surname ?? "surname";
+                $customer->user_id   = $user->id;
+                $customer->is_guest  = false;
+                $customer->save();
 
+                $user->customer = $customer;
+            }
+
+            if ($user->customer->is_guest) {
+                $this->JWTGuard->logout();
+                throw new AuthException('offline.mall::lang.components.signup.errors.user_is_guest');
+                Cart::transferSessionCartToCustomer($user->customer);
+            }
+        } catch (\Exception $e) {
+        }
         $tokenDto = new TokenDto([
             'token' => $this->JWTGuard->login($user),
             'expires' => Argon::createFromTimestamp($this->JWTGuard->getPayload()->get('exp')),
@@ -96,28 +209,74 @@ class AuthController extends Controller
         $user->created_ip_address = request()->ip();
         $user->save();
 
-        $customer            = new Customer();
-        $customer->firstname = $user->name;
-        $customer->lastname  = $user->surname;
-        $customer->user_id   = $user->id;
-        $customer->is_guest  = false;
-        $customer->save();
+        try {
+            $customer            = new Customer();
+            $customer->firstname = $user->name;
+            $customer->lastname  = $user->surname;
+            $customer->user_id   = $user->id;
+            $customer->is_guest  = false;
+            $customer->save();
 
-        $user->customer = $customer;
+            $user->customer = $customer;
 
-        Cart::transferSessionCartToCustomer($user->customer);
-        Wishlist::transferToCustomer($user->customer);
+            Cart::transferSessionCartToCustomer($user->customer);
+            Wishlist::transferToCustomer($user->customer);
+        } catch (\Exception $e) {
+            // $user->delete();
+            // throw new \ApplicationException('Registration failed');
+        }
 
 
         if ($this->userPluginResolver->getResolver()->initActivation($user) !== 'on') {
-            return [
-                'message' => 'User created'
-            ];
+            return ['message' => 'User created'];
         }
 
         request()->request->add([
-            'email' => $user->email,
-            'password' => $registrationRequest->password
+            'username' => $user->username,   // phone number stored as username
+            'password' => $registrationRequest->password,
+        ]);
+
+        return app()->call(AuthController::class);
+    }
+
+    public function registerWithPhone(RegistrationWithPhoneRequest $registrationRequest)
+    {
+        $user = $this->userPluginResolver
+            ->getProvider()
+            ->register($registrationRequest->validated());
+
+        if (empty($user)) {
+            throw new \ApplicationException('Registration failed');
+        }
+
+        $user->created_ip_address = request()->ip();
+        $user->save();
+
+        try {
+            $customer            = new Customer();
+            $customer->firstname = $user->name;
+            $customer->lastname  = $user->surname;
+            $customer->user_id   = $user->id;
+            $customer->is_guest  = false;
+            $customer->save();
+
+            $user->customer = $customer;
+
+            Cart::transferSessionCartToCustomer($user->customer);
+            Wishlist::transferToCustomer($user->customer);
+        } catch (\Exception $e) {
+            // $user->delete();
+            // throw new \ApplicationException('Registration failed');
+        }
+
+
+        if ($this->userPluginResolver->getResolver()->initActivation($user) !== 'on') {
+            return ['message' => 'User created'];
+        }
+
+        request()->request->add([
+            'username' => $user->username,   // phone number stored as username
+            'password' => $registrationRequest->password,
         ]);
 
         return app()->call(AuthController::class);
@@ -194,7 +353,7 @@ class AuthController extends Controller
             'code' => $code
         ];
 
-        Mail::send('rainlab.user::mail.restore', $data, function($message) use ($user) {
+        Mail::send('rainlab.user::mail.restore', $data, function ($message) use ($user) {
             $message->to($user->email, $user->full_name);
         });
     }

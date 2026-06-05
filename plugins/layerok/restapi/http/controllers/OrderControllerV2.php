@@ -73,6 +73,7 @@ class OrderControllerV2 extends Controller
 
         $shippingMethod = ShippingMethod::where('id', $data['shipping_method_id'])->first();
         $address = null;
+        $address_id = $data['address'] ?? null;
         $mode = ServiceMode::ON_SITE;
         $area = null;
         $delivery_time = $spot->wait_minutes_spot ?? 0; //if takeaway
@@ -199,6 +200,21 @@ class OrderControllerV2 extends Controller
         $data['spot_minutes'] = $delivery_time;
         $courier_fee = null;
         if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
+            try {
+                if ($user) {
+                    $user->fill([
+                        'house_type' => $data['house_type'] ?? null,
+                        'house'     => $data['house'],
+                        'floor'    => $data['floor'] ?? null,
+                        'apartment' => $data['apartment'] ?? null,
+                        'entrance'      => $data['entrance'] ?? null,
+                        'street' => $address_id ?? null,
+                    ]);
+                    $user->save();
+                }
+            } catch (\Exception $e) {
+            }
+
             $data['spot_minutes'] = null;
             $data['delivery_minutes'] = $delivery_time;
             if ($total / 100 < $area->min) {

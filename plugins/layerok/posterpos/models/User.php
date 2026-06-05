@@ -16,7 +16,13 @@ class User extends UserBase
         'password_confirmation',
         'created_ip_address',
         'last_ip_address',
-        'phone'
+        'phone',
+        'street',
+        'house_type',
+        'house',
+        'floor',
+        'apartment',
+        'entrance'
     ];
 
     public function isCallCenterAdmin(): bool {
