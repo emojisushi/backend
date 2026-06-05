@@ -16,7 +16,8 @@ class SmsController extends Controller
         $sanitized = preg_replace('/\D/', '', $phone); // strip all non-digits
 
         $confirmation = SmsConfirmation::whereRaw(
-            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') = ?",
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
+     REGEXP CONCAT('^(38)?', ?)",
             [$sanitized]
         )->first();
 

@@ -76,17 +76,8 @@ class AuthController extends Controller
             }
         } catch (\Exception $e) {
         }
-        $tokenDto = new TokenDto([
-            'token' => $this->JWTGuard->login($user),
-            'expires' => Argon::createFromTimestamp($this->JWTGuard->getPayload()->get('exp')),
-            'user' => $user->load([
-                'customer.addresses',
-                'customer.orders.products.product.image_sets',
-                'customer.orders.order_state'
-            ]),
-        ]);
 
-        return ['data' => $tokenDto->toArray()];
+        return $this->generateTokenResponse($user);
     }
 
     /**
@@ -105,7 +96,15 @@ class AuthController extends Controller
         // }
         $credentials = $loginRequest->validated();
 
-        $user = UserModel::where('phone', $credentials['phone'])->first();
+        $sanitized = preg_replace('/\D/', '', $credentials['phone']);
+        if (str_starts_with($sanitized, '38')) {
+            $sanitized = substr($sanitized, 2);
+        }
+        $user = UserModel::whereRaw(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
+     REGEXP CONCAT('^(38)?', ?)",
+            [$sanitized]
+        )->first();
 
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             throw new \October\Rain\Auth\AuthException('Login failed');
@@ -132,23 +131,24 @@ class AuthController extends Controller
             }
         } catch (\Exception $e) {
         }
-        $tokenDto = new TokenDto([
-            'token' => $this->JWTGuard->login($user),
-            'expires' => Argon::createFromTimestamp($this->JWTGuard->getPayload()->get('exp')),
-            'user' => $user->load([
-                'customer.addresses',
-                'customer.orders.products.product.image_sets',
-                'customer.orders.order_state'
-            ]),
-        ]);
 
-        return ['data' => $tokenDto->toArray()];
+        return $this->generateTokenResponse($user);
     }
 
     public function loginWithSMS(LoginWithSMSRequest $loginRequest): array
     {
         $credentials = $loginRequest->validated();
-        $confirmation = SmsConfirmation::where('phone', $credentials['phone'])->first();
+
+        // Sanitize: strip all non-digit characters, then remove leading 38
+        $sanitized = preg_replace('/\D/', '', $credentials['phone']);
+        if (str_starts_with($sanitized, '38')) {
+            $sanitized = substr($sanitized, 2);
+        }
+        $confirmation = SmsConfirmation::whereRaw(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
+     REGEXP CONCAT('^(38)?', ?)",
+            [$sanitized]
+        )->first();
 
         if (!$confirmation) {
             throw new \October\Rain\Auth\AuthException('Login failed');
@@ -158,17 +158,24 @@ class AuthController extends Controller
             $confirmation->confirmed = true;
             $confirmation->save();
         } else {
-            throw new \October\Rain\Auth\AuthException('Login failed');
+            throw new \October\Rain\Auth\AuthException('Invalid code');
         }
-        $user = UserModel::where('phone', $credentials['phone'])->first();
 
-        // If the user doesn't have a Customer model it was created via the backend.
-        // Make sure to add the Customer model now
+        $user = UserModel::whereRaw(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
+     REGEXP CONCAT('^(38)?', ?)",
+            [$sanitized]
+        )->first();
+
+        if (!$user) {
+            throw new \October\Rain\Auth\AuthException('User not found');
+        }
+
         try {
-            if (! $user->customer && ! $user->is_guest) {
+            if (!$user->customer && !$user->is_guest) {
                 $customer            = new Customer();
-                $customer->firstname = $user->name ?? "name";
-                $customer->lastname  = $user->surname ?? "surname";
+                $customer->firstname = $user->name ?? 'name';
+                $customer->lastname  = $user->surname ?? 'surname';
                 $customer->user_id   = $user->id;
                 $customer->is_guest  = false;
                 $customer->save();
@@ -176,24 +183,17 @@ class AuthController extends Controller
                 $user->customer = $customer;
             }
 
-            if ($user->customer->is_guest) {
+            if ($user->customer && $user->customer->is_guest) {
                 $this->JWTGuard->logout();
                 throw new AuthException('offline.mall::lang.components.signup.errors.user_is_guest');
-                Cart::transferSessionCartToCustomer($user->customer);
             }
+        } catch (AuthException $e) {
+            throw $e;
         } catch (\Exception $e) {
+            //
         }
-        $tokenDto = new TokenDto([
-            'token' => $this->JWTGuard->login($user),
-            'expires' => Argon::createFromTimestamp($this->JWTGuard->getPayload()->get('exp')),
-            'user' => $user->load([
-                'customer.addresses',
-                'customer.orders.products.product.image_sets',
-                'customer.orders.order_state'
-            ]),
-        ]);
 
-        return ['data' => $tokenDto->toArray()];
+        return $this->generateTokenResponse($user);
     }
 
     public function register(RegistrationRequest $registrationRequest)
@@ -279,7 +279,7 @@ class AuthController extends Controller
             'password' => $registrationRequest->password,
         ]);
 
-        return app()->call(AuthController::class);
+        return $this->generateTokenResponse($user);
     }
 
     public function resetPassword()
@@ -356,5 +356,19 @@ class AuthController extends Controller
         Mail::send('rainlab.user::mail.restore', $data, function ($message) use ($user) {
             $message->to($user->email, $user->full_name);
         });
+    }
+    private function generateTokenResponse(UserModel $user): array
+    {
+        $tokenDto = new TokenDto([
+            'token'   => $this->JWTGuard->login($user),
+            'expires' => Argon::createFromTimestamp($this->JWTGuard->getPayload()->get('exp')),
+            'user'    => $user->load([
+                'customer.addresses',
+                'customer.orders.products.product.image_sets',
+                'customer.orders.order_state',
+            ]),
+        ]);
+
+        return ['data' => $tokenDto->toArray()];
     }
 }
