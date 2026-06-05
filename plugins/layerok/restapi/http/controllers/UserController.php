@@ -43,7 +43,7 @@ class UserController extends Controller
         PosterApi::init(config('poster'));
 
         $client = PosterApi::clients()->getClients([
-            'phone' => $user->username,
+            'phone' => $user->phone,
         ]);
 
         $clientId = $client->response[0]->client_id ?? null;
@@ -57,55 +57,52 @@ class UserController extends Controller
             'date_to'   => now()->format('Ymd'),
             'type'     => 'clients',
             'id'       => $clientId,
-            // 'status'   => 2,
+            'status'   => 2,
         ]);
 
         return response()->json($transactions->response ?? []);
     }
 
     public function order($id): JsonResponse
-    {
-        $jwtGuard = app('JWTGuard');
-        /** @var User $user */
-        $user = $jwtGuard->user();
-        PosterApi::init(config('poster'));
+{
+    $jwtGuard = app('JWTGuard');
+    /** @var User $user */
+    $user = $jwtGuard->user();
+    PosterApi::init(config('poster'));
 
-        $transaction = PosterApi::dash()->getTransaction([
-            'transaction_id' => $id,
-        ]);
+    $transaction = PosterApi::dash()->getTransaction([
+        'include_delivery' => 'true',
+        'include_products' => 'true',
+        'transaction_id' => $id,
+    ]);
 
-        $products = PosterApi::dash()->getTransactionProducts([
-            'transaction_id' => $id,
-        ]);
+    $data = $transaction->response[0] ?? null;
 
-        $onlineOrder = OnlineOrder::where('poster_id', $id)->first();
-
-        $data = $transaction->response[0] ?? null;
-
-        $transactionPhone = preg_replace('/\D/', '', $data->client_phone ?? '');
-        $userPhone        = preg_replace('/\D/', '', $user->username ?? '');
-
-        if ($transactionPhone !== $userPhone) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-        if (!$data) {
-            return response()->json([]);
-        }
-
-        $data->products = $products->response ?? [];
-
-        if ($onlineOrder) {
-            $data->address          = $onlineOrder->address;
-            $data->service_mode     = $onlineOrder->service_mode;
-            $data->comment          = $onlineOrder->comment;
-            $data->first_name       = $onlineOrder->first_name;
-            $data->last_name        = $onlineOrder->last_name;
-            $data->delivery_price   = $onlineOrder->delivery_price;
-            $data->delivery_minutes = $onlineOrder->delivery_minutes;
-        }
-
-        return response()->json($data);
+    if (!$data) {
+        return response()->json([]);
     }
+
+    $transactionPhone = preg_replace('/\D/', '', $data->client_phone ?? '');
+    $userPhone        = preg_replace('/\D/', '', $user->phone ?? '');
+
+    if ($transactionPhone !== $userPhone) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    $address = null;
+    $dPrice = null;
+    if ($data->delivery) {
+        $address = $data->delivery->address1;
+        $dPrice = $data->delivery->delivery_price;
+    }
+
+    return response()->json([
+        'products' => $data->products ?? [],
+        'address'  => $address ?? null,
+        'delivery_price'  => $dPrice ?? null,
+        'sum'      => $data->payed_sum ?? null,
+    ]);
+}
 
     public function save()
     {
