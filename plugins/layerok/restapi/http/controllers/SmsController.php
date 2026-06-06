@@ -108,7 +108,9 @@ class SmsController extends Controller
             "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
      REGEXP CONCAT('^(38)?', ?)",
             [$sanitized]
-        )->first();
+        )
+            ->orderByDesc('updated_at')
+            ->first();
 
         if (!$confirmation) {
             return response()->json([
