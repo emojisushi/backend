@@ -57,13 +57,18 @@ class CatalogController extends Controller
     {
         $query = Category::query()->with(['image']);
         $query->where('published', '=', '1');
-
         // todo: inject it via container
+        $city = input('city_slug');
         $appService = new AppService();
+        if (!$city) {
+            $city = $appService->getCurrentCity();
+        } else {
+            $city = $appService->getCurrentCity($city);
+        }
 
-        if ($city = $appService->getCurrentCity()) {
+        if ($city) {
             $query->whereDoesntHave('hidden_categories_in_city', function ($query) use ($city) {
-                return $query->where('city_id', $city->id);
+                $query->where('city_id', $city->id);
             });
         }
 
