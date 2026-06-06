@@ -102,8 +102,13 @@ class SmsController extends Controller
     {
         $phone = $request->input('phone');
         $code = $request->input('code');
+        $sanitized = preg_replace('/\D/', '', $phone); // strip all non-digits
 
-        $confirmation = SmsConfirmation::where('phone', $phone)->first();
+        $confirmation = SmsConfirmation::whereRaw(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
+     REGEXP CONCAT('^(38)?', ?)",
+            [$sanitized]
+        )->first();
 
         if (!$confirmation) {
             return response()->json([
