@@ -176,35 +176,63 @@ class WayForPayController
             $deepLink = "emojisushi://payment?orderId={$orderId}&wait_time={$waitTime}";
 
             return response()->make("
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <title>Оплата</title>
-            </head>
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <title>Оплата</title>
+                </head>
 
-            <body style='display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center; background-color: #141414;'>
+                <body style='display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;background-color:#141414;'>
 
-            <div>
-            <button onclick='openApp()' style='background-color: #FFE600;padding: 24px;border-radius: 10px;font-size:16px; border: none;'>
-                Повернутися до дoдатку для перегляду замовлення
-            </button>
-            </div>
+                <div>
+                    <p style='color:white;margin-bottom:24px;font-size:16px;'>Оплата успішна! ✅</p>
+                    <a id='deeplink-btn' href='{$deepLink}' style='background-color:#FFE600;padding:24px;border-radius:10px;font-size:16px;border:none;text-decoration:none;color:black;display:inline-block;'>
+                        Повернутися до додатку
+                    </a>
+                </div>
 
-            <script>
-            const deepLink = '{$deepLink}';
-            function openApp() {
-                window.location.href = deepLink;
-            }
+                <script>
+                    const deepLink = '{$deepLink}';
+                    let opened = false;
 
-            setTimeout(() => {
-                window.location.href = deepLink;
-            }, 1500);
-            </script>
+                    function tryIframe() {
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = deepLink;
+                        document.body.appendChild(iframe);
+                        setTimeout(() => {
+                            if (document.body.contains(iframe)) {
+                                document.body.removeChild(iframe);
+                            }
+                        }, 2000);
+                    }
 
-            </body>
-            </html>
-            ");
+                    function tryAnchor() {
+                        document.getElementById('deeplink-btn').click();
+                    }
+
+                    function tryLocation() {
+                        window.location.href = deepLink;
+                    }
+
+                    function openApp() {
+                        if (opened) return;
+                        opened = true; // prevent double-firing
+
+                        tryIframe();
+
+                        setTimeout(tryAnchor, 100);
+
+                        setTimeout(tryLocation, 300);
+                    }
+
+                    setTimeout(openApp, 500);
+                </script>
+
+                </body>
+                </html>
+                ");
         }
         $baseUrl = WayforpaySettings::get('status_url');
         return Redirect::to($baseUrl . '?' . http_build_query($params));
