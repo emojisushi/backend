@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 namespace Layerok\Restapi\Http\Controllers;
-
+use DB;
 use Cms\Classes\Page;
 use Layerok\PosterPos\Models\Spot;
 use Layerok\PosterPos\Models\Wishlist;
@@ -148,7 +148,9 @@ class AuthController extends Controller
             "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
      REGEXP CONCAT('^(38)?', ?)",
             [$sanitized]
-        )->first();
+        )
+            ->orderByDesc('updated_at')
+            ->first();
 
         if (!$confirmation) {
             throw new \October\Rain\Auth\AuthException('Login failed');
@@ -211,8 +213,8 @@ class AuthController extends Controller
 
         try {
             $customer            = new Customer();
-            $customer->firstname = $user->name;
-            $customer->lastname  = $user->surname;
+            $customer->firstname = $user->name ?? 'name';
+            $customer->lastname  = $user->surname ?? 'surname';
             $customer->user_id   = $user->id;
             $customer->is_guest  = false;
             $customer->save();
@@ -241,21 +243,45 @@ class AuthController extends Controller
 
     public function registerWithPhone(RegistrationWithPhoneRequest $registrationRequest)
     {
+        $credentials = $registrationRequest->validated();
+
+
+        $sanitized = preg_replace('/\D/', '', $credentials['phone']);
+        if (str_starts_with($sanitized, '38')) {
+            $sanitized = substr($sanitized, 2);
+        }
+        $confirmation = SmsConfirmation::whereRaw(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', '') 
+     REGEXP CONCAT('^(38)?', ?)",
+            [$sanitized]
+        )
+            ->orderByDesc('updated_at')
+            ->first();
+
+        if (!$confirmation) {
+            throw new \October\Rain\Auth\AuthException('Login failed');
+        }
+
+        if ($confirmation->last_code == $credentials['code']) {
+            $confirmation->confirmed = true;
+            $confirmation->save();
+        } else {
+            throw new \October\Rain\Auth\AuthException(['code' => 'Невірний код']);
+        }
+
         $user = $this->userPluginResolver
             ->getProvider()
-            ->register($registrationRequest->validated());
-
+            ->register($credentials);
         if (empty($user)) {
             throw new \ApplicationException('Registration failed');
         }
-
         $user->created_ip_address = request()->ip();
         $user->save();
 
         try {
             $customer            = new Customer();
-            $customer->firstname = $user->name;
-            $customer->lastname  = $user->surname;
+            $customer->firstname = $user->name ?? 'name';
+            $customer->lastname  = $user->surname ?? 'surname';
             $customer->user_id   = $user->id;
             $customer->is_guest  = false;
             $customer->save();
@@ -356,6 +382,33 @@ class AuthController extends Controller
         Mail::send('rainlab.user::mail.restore', $data, function ($message) use ($user) {
             $message->to($user->email, $user->full_name);
         });
+    }
+    public function deleteAccount(): array
+    {
+        $jwtGuard = app('JWTGuard');
+        $user = $jwtGuard->user();
+
+        if (!$user) {
+            throw new \ApplicationException('Unauthorized');
+        }
+
+        DB::transaction(function () use ($user) {
+            if ($user->customer) {
+                Cart::where('customer_id', $user->customer->id)->delete();
+                Wishlist::where('customer_id', $user->customer->id)->delete();
+                $user->customer->forceDelete();
+            }
+
+            // SmsConfirmation::where('phone', $user->phone)->delete();
+
+            $user->forceDelete();
+        });
+
+        $this->JWTGuard->logout();
+
+        return [
+            'message' => 'Account deleted',
+        ];
     }
     private function generateTokenResponse(UserModel $user): array
     {

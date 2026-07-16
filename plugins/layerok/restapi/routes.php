@@ -79,6 +79,7 @@ Route::group([
         Route::post('register-with-phone', [AuthController::class, 'registerWithPhone']);
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
         Route::post('restore-password', [AuthController::class, 'restorePassword']);
+        Route::delete('delete-account', [AuthController::class, 'deleteAccount']);
 
 
         Route::post('refresh', RefreshController::class);

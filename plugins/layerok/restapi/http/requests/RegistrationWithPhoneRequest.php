@@ -20,7 +20,8 @@ class RegistrationWithPhoneRequest extends FormRequest
             'phone' => 'required|string|unique:users,username',
             'password' => "required|between:$minPasswordLength,255|confirmed",
             'password_confirmation' => "required_with:password|between:$minPasswordLength,255",
-            'agree' => 'accepted'
+            'agree' => 'accepted',
+            'code' => 'required'
         ];
     }
 

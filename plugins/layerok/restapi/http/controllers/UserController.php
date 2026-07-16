@@ -9,6 +9,7 @@ use OFFLINE\Mall\Models\Address;
 use RainLab\Location\Models\Country;
 use poster\src\PosterApi;
 use Layerok\PosterPos\Models\OnlineOrder;
+use OFFLINE\Mall\Models\Product;
 
 class UserController extends Controller
 {
@@ -64,45 +65,80 @@ class UserController extends Controller
     }
 
     public function order($id): JsonResponse
-{
-    $jwtGuard = app('JWTGuard');
-    /** @var User $user */
-    $user = $jwtGuard->user();
-    PosterApi::init(config('poster'));
+    {
+        $jwtGuard = app('JWTGuard');
+        /** @var User $user */
+        $user = $jwtGuard->user();
+        PosterApi::init(config('poster'));
 
-    $transaction = PosterApi::dash()->getTransaction([
-        'include_delivery' => 'true',
-        'include_products' => 'true',
-        'transaction_id' => $id,
-    ]);
+        $transaction = PosterApi::dash()->getTransaction([
+            'include_delivery' => 'true',
+            'include_products' => 'true',
+            'transaction_id'   => $id,
+        ]);
+        $transactionProducts = collect(
+            PosterApi::dash()->getTransactionProducts(['transaction_id' => $id])->response ?? []
+        );
+        $productNames = $transactionProducts
+            ->keyBy('product_id')
+            ->map(fn($p) => $p->product_name ?? null);
 
-    $data = $transaction->response[0] ?? null;
+        $data = $transaction->response[0] ?? null;
 
-    if (!$data) {
-        return response()->json([]);
+        if (!$data) {
+            return response()->json([]);
+        }
+
+        $transactionPhone = preg_replace('/\D/', '', $data->client_phone ?? '');
+        $userPhone        = preg_replace('/\D/', '', $user->phone ?? '');
+
+        if ($transactionPhone !== $userPhone) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        $posterIds = collect($data->products ?? [])->pluck('product_id')->unique()->values()->toArray();
+
+        $pivotRows = \DB::table('layerok_posterpos_poster_accountable')
+            ->where('poster_account_id', 1) // todo: handle multiple accounts
+            // ->where('poster_accountable_type', 'mall.product')
+            ->whereIn('poster_id', $posterIds)
+            ->get();
+
+        $posterIdToProductId = $pivotRows
+            ->keyBy(fn($row) => (string) $row->poster_id)
+            ->map(fn($row) => $row->poster_accountable_id);
+
+        $products = Product::whereIn('id', $posterIdToProductId->values())->get()->keyBy('id');
+
+        $enrichedProducts = collect($data->products ?? [])->map(function ($transactionProduct) use ($posterIdToProductId, $products, $productNames, $transactionProducts) {
+            $posterId       = (string) $transactionProduct->product_id;
+            $localProductId = $posterIdToProductId[$posterId] ?? null;
+            $localProduct   = $localProductId ? $products[$localProductId] ?? null : null;
+
+            $transactionProductData = $transactionProducts->keyBy('product_id')[$posterId] ?? null;
+
+            return [
+                'poster_id'   => $posterId,
+                'product_id'  => $localProduct?->id ?? -1,
+                'name'        => $localProduct?->name ?? $productNames[$posterId] ?? 'Невідомий товар',
+                'num'         => $transactionProductData?->num ?? $transactionProduct->num ??  null,
+                'product_sum' => $transactionProductData?->product_sum ?? $transactionProduct->product_sum ?? null,
+            ];
+        });
+
+        $address = null;
+        $dPrice  = null;
+        if ($data->delivery) {
+            $address = $data->delivery->address1;
+            $dPrice  = $data->delivery->delivery_price;
+        }
+
+        return response()->json([
+            'products'       => $enrichedProducts,
+            'address'        => $address,
+            'delivery_price' => $dPrice,
+            'sum'            => $data->payed_sum ?? null,
+        ]);
     }
-
-    $transactionPhone = preg_replace('/\D/', '', $data->client_phone ?? '');
-    $userPhone        = preg_replace('/\D/', '', $user->phone ?? '');
-
-    if ($transactionPhone !== $userPhone) {
-        return response()->json(['message' => 'Unauthorized'], 403);
-    }
-
-    $address = null;
-    $dPrice = null;
-    if ($data->delivery) {
-        $address = $data->delivery->address1;
-        $dPrice = $data->delivery->delivery_price;
-    }
-
-    return response()->json([
-        'products' => $data->products ?? [],
-        'address'  => $address ?? null,
-        'delivery_price'  => $dPrice ?? null,
-        'sum'      => $data->payed_sum ?? null,
-    ]);
-}
 
     public function save()
     {
