@@ -85,10 +85,10 @@ class FcmService
     {
         $responseBody = $e->getResponse()->getBody()->getContents();
 
-        \Log::error('FCM RESPONSE', [
-            'token' => $token,
-            'body' => $responseBody,
-        ]);
+        // \Log::error('FCM RESPONSE', [
+        //     'token' => $token,
+        //     'body' => $responseBody,
+        // ]);
 
         $body = json_decode($responseBody, true);
         $status  = $body['error']['status'] ?? '';
@@ -112,7 +112,7 @@ class FcmService
         if (in_array($errorCode, $invalidTokenErrors)) {
             // Token is dead — delete it
             FcmToken::where('fcm_token', $token)->delete();
-            \Log::info("FCM: deleted invalid token [{$errorCode}]");
+            //\Log::info("FCM: deleted invalid token [{$errorCode}]");
         } else {
             // Log other errors (QUOTA_EXCEEDED, INTERNAL, etc.) but keep token
             \Log::error("FCM: failed to send [{$errorCode}]", ['token' => $token]);

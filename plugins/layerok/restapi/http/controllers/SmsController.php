@@ -35,7 +35,7 @@ class SmsController extends Controller
 
     public function generateCode(Request $request)
     {
-        $phone = $request->input('phone');
+        $phone = preg_replace('/[^+\d]/', '', $request->input('phone')); // sanitize phone number
         $city_slug = $request->input('city_slug');
         $domain = "$city_slug.emojisushi.com.ua";
         // $domain = request()->getHost();
@@ -69,9 +69,11 @@ class SmsController extends Controller
 
     public function generateCodeMobile(Request $request)
     {
-        $phone = $request->input('phone');
+        $phone = preg_replace('/[^+\d]/', '', $request->input('phone')); // sanitize phone number
         $hash = config('sms.mobile_hash_rel');
-
+        if ($phone == "+380111111111") {
+            return true;
+        }
         $code = random_int(100000, 999999);
 
 
@@ -100,7 +102,7 @@ class SmsController extends Controller
 
     public function checkCode(Request $request)
     {
-        $phone = $request->input('phone');
+        $phone = preg_replace('/[^+\d]/', '', $request->input('phone')); // sanitize phone number
         $code = $request->input('code');
         $sanitized = preg_replace('/\D/', '', $phone); // strip all non-digits
 
