@@ -607,6 +607,11 @@ class OrderControllerV2 extends Controller
             return $acc + $product->prices[0]->price * $item['quantity'];
         }, 0);
 
+        $phone_formatted = $data['phone'];
+        if (str_starts_with($phone_formatted, '+38')) {
+            $phone_formatted = substr($phone_formatted, 3);
+        }
+
         $receipt
             ->headline(htmlspecialchars($headline))
             ->field(
@@ -619,7 +624,7 @@ class OrderControllerV2 extends Controller
             )
             ->field(
                 trans('layerok.restapi::lang.receipt.phone'),
-                htmlspecialchars($data['phone'])
+                htmlspecialchars($phone_formatted)
             )
             ->field(
                 trans('layerok.restapi::lang.receipt.delivery_method'),

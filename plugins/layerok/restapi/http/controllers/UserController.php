@@ -21,15 +21,18 @@ class UserController extends Controller
             'customer.addresses',
             'customer.orders.products.product.image_sets',
             'customer.orders.order_state'
-        ])
-            ->find($jwtGuard->user()->id);
-        // PosterApi::init(config('poster'));
-        // $response = PosterApi::clients()->getClients([
-        //     'phone' => $user->username,
-        // ]) ?? 0;
-        // $bonus = $response->response[0]->bonus ?? 0;
-        // $user->bonus_amount = $bonus;
+        ])->find($jwtGuard->user()->id);
 
+        // Remove everything except digits and +
+        $phone = preg_replace('/[^+\d]/', '', $user->phone);
+
+        if (str_starts_with($phone, '38')) {
+            $phone = '+' . $phone;
+        }
+        if (str_starts_with($phone, '0')) {
+            $phone = '+38' . $phone;
+        }
+        $user->phone = $phone;
         return response()->json(array_merge($user->toArray(), [
             'is_call_center_admin' => $user->isCallCenterAdmin()
         ]));
