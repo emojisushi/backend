@@ -160,3 +160,7 @@
 1.2.6:
     - 'Add address info to users table'
     - add_address_info_to_users_table.php
+
+1.2.7:
+    - 'Add mobile field to products table'
+    - add_mobile_to_products_table.php

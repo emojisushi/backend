@@ -39,7 +39,9 @@ class SmsController extends Controller
         $city_slug = $request->input('city_slug');
         $domain = "$city_slug.emojisushi.com.ua";
         // $domain = request()->getHost();
-
+        if ($phone == "+380111111111" || $phone == "+380990000000" || $phone == "+380999999999") {
+            return true;
+        }
         $code = random_int(100000, 999999);
 
         $confirmation = SmsConfirmation::updateOrCreate(
@@ -71,7 +73,7 @@ class SmsController extends Controller
     {
         $phone = preg_replace('/[^+\d]/', '', $request->input('phone')); // sanitize phone number
         $hash = config('sms.mobile_hash_rel');
-        if ($phone == "+380111111111") {
+        if ($phone == "+380111111111" || $phone == "+380990000000" || $phone == "+380999999999") {
             return true;
         }
         $code = random_int(100000, 999999);

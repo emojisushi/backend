@@ -281,6 +281,11 @@ class Plugin extends PluginBase
                 //        'type' => 'relation',
                 //        'tab' => 'offline.mall::lang.product.general'
                 //    ];
+                $config['tabs']['fields']['mobile'] = [
+                    'label' => 'Только для мобильного приложения',
+                    'type' => 'switch',
+                    'tab' => 'offline.mall::lang.product.general',
+                ];
                 $config['tabs']['fields']['unavailable_products_in_spot'] = [
                     'label' => 'Недоступный товар на точке',
                     'type' => 'relation',
@@ -398,6 +403,7 @@ class Plugin extends PluginBase
         });
 
         Product::extend(function ($model) {
+            $model->fillable[] = 'mobile';
             $model->belongsToMany['hide_products_in_spot'] = [
                 Spot::class,
                 'table'    => 'layerok_posterpos_hide_products_in_spot',
