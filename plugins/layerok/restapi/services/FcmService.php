@@ -54,9 +54,9 @@ class FcmService
                     ],
                 ]
             );
-            \Log::info('FCM success', [
-                'body' => $response->getBody()->getContents()
-            ]);
+            //\Log::info('FCM success', [
+            //    'body' => $response->getBody()->getContents()
+            //]);
             FcmToken::where('fcm_token', $token)
                 ->update(['last_used_at' => now()]);
 
@@ -85,10 +85,10 @@ class FcmService
     {
         $responseBody = $e->getResponse()->getBody()->getContents();
 
-        // \Log::error('FCM RESPONSE', [
-        //     'token' => $token,
-        //     'body' => $responseBody,
-        // ]);
+         \Log::error('FCM RESPONSE', [
+             'token' => $token,
+             'body' => $responseBody,
+         ]);
 
         $body = json_decode($responseBody, true);
         $status  = $body['error']['status'] ?? '';
@@ -124,10 +124,10 @@ class FcmService
         $path = base_path(env('FIREBASE_CREDENTIALS'));
 
         $serviceAccount = json_decode(
-            file_get_contents($path),
+            file_get_contents(storage_path('app/firebase-service-account.json')),
             true
         );
-
+        //\Log::info("FCM: test ");
         $now = time();
 
         // Build JWT header + payload
