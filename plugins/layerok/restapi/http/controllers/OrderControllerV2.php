@@ -204,7 +204,7 @@ class OrderControllerV2 extends Controller
                 if ($user) {
                     $user->fill([
                         'house_type' => $data['house_type'] ?? null,
-                        'house'     => $data['house'],
+                        'house'     => $data['house'] ?? null,
                         'floor'    => $data['floor'] ?? null,
                         'apartment' => $data['apartment'] ?? null,
                         'entrance'      => $data['entrance'] ?? null,

@@ -123,7 +123,12 @@ class CatalogController extends Controller
         $items = $db->get();
         $itemIds = $items->pluck('id')
             ->toArray();
-
+        if (request()->has('mobile') && !request()->boolean('mobile')) {
+            $itemIds = Product::whereIn('id', $itemIds)
+                ->where('mobile', false)
+                ->pluck('id')
+                ->toArray();
+        }
         $unorderedModels = Product::with(
             [
                 'variants',
@@ -139,7 +144,6 @@ class CatalogController extends Controller
                 }
             ]
         )->find($itemIds);
-
         // preserve order
         return collect($itemIds)->map(function ($itemId) use ($unorderedModels) {
             return $unorderedModels->first(function ($model) use ($itemId) {

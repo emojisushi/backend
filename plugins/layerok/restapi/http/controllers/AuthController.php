@@ -266,7 +266,7 @@ class AuthController extends Controller
             $confirmation->confirmed = true;
             $confirmation->save();
         } else {
-            throw new \October\Rain\Auth\AuthException(['code' => 'Невірний код']);
+            throw new \October\Rain\Auth\AuthException('Invalid code');
         }
 
         $user = $this->userPluginResolver
