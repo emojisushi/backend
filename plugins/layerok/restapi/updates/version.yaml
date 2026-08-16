@@ -48,3 +48,7 @@
 1.0.25:
     - 'Add fcm_tokens table'
     - add_fcm_tokens_table.php
+
+1.0.26:
+    - 'Widen products/cart columns on online_orders to text'
+    - change_online_orders_column_types.php
