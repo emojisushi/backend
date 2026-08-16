@@ -123,12 +123,14 @@ class CatalogController extends Controller
         $items = $db->get();
         $itemIds = $items->pluck('id')
             ->toArray();
+        $mobileFlags = Product::whereIn('id', $itemIds)
+            ->pluck('mobile', 'id'); // [$id => bool]
+
         if (request()->has('mobile') && !request()->boolean('mobile')) {
-            $itemIds = Product::whereIn('id', $itemIds)
-                ->where('mobile', false)
-                ->pluck('id')
-                ->toArray();
+            $itemIds = array_values(array_filter($itemIds, fn($id) => !$mobileFlags[$id]));
         }
+        usort($itemIds, fn($a, $b) => $mobileFlags[$b] <=> $mobileFlags[$a]);
+        
         $unorderedModels = Product::with(
             [
                 'variants',
