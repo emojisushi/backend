@@ -130,9 +130,9 @@ class UserController extends Controller
 
         $address = null;
         $dPrice  = null;
-        if ($data->delivery) {
-            $address = $data->delivery->address1;
-            $dPrice  = $data->delivery->delivery_price;
+        if (isset($data->delivery)) {
+            $address = $data->delivery->address1 ?? null;
+            $dPrice = $data->delivery->delivery_price ?? null;
         }
 
         return response()->json([
