@@ -286,6 +286,11 @@ class Plugin extends PluginBase
                     'type' => 'switch',
                     'tab' => 'offline.mall::lang.product.general',
                 ];
+                $config['tabs']['fields']['spicy'] = [
+                    'label' => 'Острое',
+                    'type' => 'switch',
+                    'tab' => 'offline.mall::lang.product.general',
+                ];
                 $config['tabs']['fields']['unavailable_products_in_spot'] = [
                     'label' => 'Недоступный товар на точке',
                     'type' => 'relation',

@@ -164,3 +164,7 @@
 1.2.7:
     - 'Add mobile field to products table'
     - add_mobile_to_products_table.php
+
+1.2.8:
+    - 'Add spicy field to products table'
+    - add_spicy_to_products_table.php
