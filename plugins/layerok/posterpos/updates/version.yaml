@@ -176,3 +176,6 @@
 1.2.10:
     - 'Add calories, proteins, fats, carbs (kbzhu) fields to products table'
     - add_kbzhu_to_products_table.php
+1.2.11:
+    - 'Add promotions table'
+    - add_promotions_table.php

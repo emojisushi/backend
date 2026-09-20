@@ -3,7 +3,9 @@
 namespace Layerok\RestApi\Models;
 
 use Model;
+use OFFLINE\Mall\Models\Category;
 use Validator;
+
 class Settings extends Model
 {
     public $implement = [\System\Behaviors\SettingsModel::class];
@@ -14,15 +16,23 @@ class Settings extends Model
 
     // Reference to field configuration
     public $settingsFields = 'fields.yaml';
+
     public $rules = [
         'bonus_enabled' => 'required|boolean',
-        'bonus_rate' => 'required|integer|min:0|max:100',
         'max_bonus' => 'required|integer|min:0|max:100',
-        'get_bonus_from_used_bonus' => 'required|boolean',
     ];
+
     public function beforeSave()
     {
         $validator = Validator::make($this->value, $this->rules);
         $validator->validate();
+    }
+
+    /**
+     * Categories whose products do not count towards the bonus spending limit.
+     */
+    public function getBonusExcludedCategoriesOptions(): array
+    {
+        return Category::orderBy('name')->get()->lists('name', 'id');
     }
 }

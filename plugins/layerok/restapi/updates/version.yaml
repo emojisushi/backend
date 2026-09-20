@@ -56,3 +56,6 @@
 1.0.27:
     - 'Add city to fcm_tokens table'
     - add_city_to_fcm_tokens_table.php
+1.0.28:
+    - 'Add bonus_transactions ledger table'
+    - create_bonus_transactions_table.php

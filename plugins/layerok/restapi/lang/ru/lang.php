@@ -17,6 +17,7 @@ return [
         'address' => 'Адрес доставки',
         'products' => 'Товары',
         'total'   => 'Итого',
+        'bonuses_used' => 'Оплачено бонусами',
         'delivery_method_name'   => 'Доставка',
         'change'   => 'Приготовить сдачу с',
         'payment_method_name'   => 'Оплата',

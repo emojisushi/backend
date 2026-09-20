@@ -14,7 +14,7 @@ use Layerok\PosterPos\Classes\ServiceMode;
 use Layerok\PosterPos\Classes\ShippingMethodCode;
 use Layerok\PosterPos\Models\Spot;
 use Layerok\PosterPos\Models\User;
-use Layerok\PosterPos\Models\PendingBonus;
+use Layerok\Restapi\Services\BonusService;
 use October\Rain\Exception\ValidationException;
 use OFFLINE\Mall\Classes\Utils\Money;
 use OFFLINE\Mall\Models\Currency;
@@ -120,7 +120,8 @@ class OrderControllerV2 extends Controller
         }
 
         $products = Product::with([
-            'poster_accounts'
+            'poster_accounts',
+            'categories'
         ])->whereIn('id', collect($cart['items'])->map(fn($item) => $item['id']))->get();
 
         /** @var Collection $posterProducts */
@@ -265,21 +266,45 @@ class OrderControllerV2 extends Controller
             $incomingOrder['service_mode'] = ServiceMode::TAKEAWAY;
         }
 
+        $usedBonus = 0;
         if ($user) {
-            $usedBonus = 0;
+            // validated below; stays 0 for guests and for orders without bonuses
+            $bonusService = new BonusService();
+
             if (isset($data['bonuses_to_use'])) {
-                if (!(bool) Settings::get('bonus_enabled')) {
+                if (!$bonusService->enabled()) {
                     return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => ['Bonuses are disabled']]], 400);
                 }
-                $usedBonus = $data['bonuses_to_use'];
+                $usedBonus = (int) $data['bonuses_to_use'];
+                // Poster only writes whole currency units, so points are spent in
+                // whole hryvnia. Anything finer is floored rather than rejected.
+                $usedBonus = intdiv($usedBonus, 100) * 100;
             }
-            if ($usedBonus > $user->bonus_amount) {
-                return response()->json('Not enough bonuses', 400);
+
+            if ($usedBonus > 0) {
+                if ($usedBonus > $bonusService->balanceFor($user)) {
+                    return response()->json('Not enough bonuses', 400);
+                }
+
+                // Excluded categories do not count towards the limit, so an order of
+                // one eligible item at 100 and one excluded item at 100 allows 20 of 100.
+                $max = (int) Settings::get('max_bonus');
+                $limit = $bonusService->maxSpendable($bonusService->eligibleTotal($products, $cart));
+
+                if ($usedBonus > $limit) {
+                    return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [trans("layerok.restapi::validation.bonus_limit", ['max' => $max])]]], 400);
+                }
             }
-            $max = Settings::get('max_bonus');
-            if ($usedBonus > $total / 100 * $max) {
-                return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [trans("layerok.restapi::validation.bonus_limit", ['max' => $max])]]], 400);
-            }
+        }
+
+        // The comment is composed before the bonuses are validated, so the note is
+        // appended here — in time for both the prepaid order stored for WayForPay
+        // and the order sent straight to Poster.
+        if ($usedBonus > 0) {
+            $incomingOrder['comment'] = collect([
+                $incomingOrder['comment'] ?? null,
+                trans('layerok.restapi::lang.receipt.bonuses_used') . ': ' . intdiv($usedBonus, 100) . ' ₴',
+            ])->filter()->join(' || ');
         }
         if ($paymentMethod->code === 'wayforpay') {
             $incomingOrderTest = $incomingOrder;
@@ -309,6 +334,20 @@ class OrderControllerV2 extends Controller
             $order->online_payment_id = $wayforpay_id;
             $order->save();
 
+            // Points leave the Poster balance now, at placement, so they cannot be
+            // spent again while the payment is in flight. A declined or expired
+            // payment gives them back from the WayForPay service-url handler.
+            if ($user && $usedBonus > 0) {
+                $service = new BonusService();
+                $row = $service->reserve($user, $usedBonus, (int) $order->id);
+
+                // If Poster did not actually take the points, do not discount the
+                // charge — the client would pay less and keep the points.
+                if (!$service->applyRow($row)) {
+                    $usedBonus = 0;
+                }
+            }
+
             $client = new Client(
                 optional($data)['first_name'],
                 optional($data)['last_name'],
@@ -316,7 +355,10 @@ class OrderControllerV2 extends Controller
                 optional($data)['phone']
             );
 
-            $way_total = $total / 100;
+            // Prepaid orders are charged the discounted amount. The register adds the
+            // points back as a setOrderBonus line, so the Poster bill still balances:
+            // (total - points) prepaid + points bonus line = total.
+            $way_total = ($total - $usedBonus) / 100;
 
             $merchantAccount = $spot->merchant_account ?? null;
             $merchantSecretKey = $spot->merchant_secret_key ?? null;
@@ -485,7 +527,8 @@ class OrderControllerV2 extends Controller
                         $shippingMethod,
                         $paymentMethod,
                         $data,
-                        $spot
+                        $spot,
+                        $usedBonus
                     ),
                     'parse_mode' => "html",
                     'chat_id' => $spot->chat->internal_id
@@ -521,24 +564,14 @@ class OrderControllerV2 extends Controller
         $poster_order_id = $posterResult->response->incoming_order_id + $add_to_poster_id;
 
         if ($user) {
-            $usedBonus = 0;
-            if (isset($data['bonuses_to_use'])) {
-                $usedBonus = $data['bonuses_to_use'];
+            $usedBonus = (int) ($data['bonuses_to_use'] ?? 0);
+
+            // Points are written off in Poster right away, so the balance is correct
+            // everywhere — including the register — before the client can order again.
+            // A rejected order gives them back via the Poster webhook.
+            if ($usedBonus > 0) {
+                (new BonusService())->apply($user, $usedBonus, (int) $poster_order_id);
             }
-            $bonusRate = Settings::get('bonus_rate');
-            $dif = 0;
-            if (!(bool) Settings::get('get_bonus_from_used_bonus')) {
-                $dif = $usedBonus; // отнимаем бонусы от стоимости заказа
-            }
-            PendingBonus::create([
-                'order_id' => $poster_order_id,
-                'user_id' => $user->id,
-                'receive_bonus_amount' => floor(($total - $dif) / 100 * ($bonusRate / 100)),
-                'use_bonus_amount' => $usedBonus,
-                'pending' => true,
-            ]);
-            $user->bonus_amount -= $usedBonus;
-            $user->save();
         }
 
         $api = new Api($spot->bot->token);
@@ -552,7 +585,8 @@ class OrderControllerV2 extends Controller
                     $shippingMethod,
                     $paymentMethod,
                     $data,
-                    $spot
+                    $spot,
+                    $usedBonus
                 ),
                 'parse_mode' => "html",
                 'chat_id' => $spot->chat->internal_id
@@ -616,7 +650,8 @@ class OrderControllerV2 extends Controller
         ShippingMethod $shippingMethod,
         PaymentMethod $paymentMethod,
         $data,
-        ?Spot $spot = null
+        ?Spot $spot = null,
+        int $usedBonus = 0
     ): string {
         $money = app()->make(Money::class);
         $receipt = new Receipt();
@@ -726,8 +761,12 @@ class OrderControllerV2 extends Controller
                 )->newLine();
             })
             ->newLine()
+            ->field(
+                trans('layerok.restapi::lang.receipt.bonuses_used'),
+                $usedBonus > 0 ? $money->format($usedBonus, null, Currency::$defaultCurrency) : null
+            )
             ->field(trans('layerok.restapi::lang.receipt.total'), $money->format(
-                $total,
+                $total - $usedBonus,
                 null,
                 Currency::$defaultCurrency
             ));

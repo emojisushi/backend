@@ -1,0 +1,16 @@
+columns:
+    id:
+        label: ID
+        searchable: true
+    published:
+        label: Опубликовано
+        type: switch
+    header:
+        label: Заголовок
+        searchable: true
+    created_at:
+        label: Создано
+        type: datetime
+    updated_at:
+        label: Обновлено
+        type: datetime
