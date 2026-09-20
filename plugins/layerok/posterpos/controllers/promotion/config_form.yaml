@@ -1,0 +1,34 @@
+# ===================================
+#  Form Behavior Config
+# ===================================
+
+# Record name
+name: Promotion
+
+# Model Form Field configuration
+form: $/layerok/posterpos/models/promotion/fields.yaml
+
+# Model Class name
+modelClass: Layerok\PosterPos\Models\Promotion
+
+# Default redirect location
+defaultRedirect: layerok/posterpos/promotion
+
+# Create page
+create:
+    title: backend::lang.form.create_title
+    redirect: layerok/posterpos/promotion/update/:id
+    redirectClose: layerok/posterpos/promotion
+    form: $/layerok/posterpos/models/promotion/fields.yaml
+
+# Update page
+update:
+    title: backend::lang.form.update_title
+    redirect: layerok/posterpos/promotion
+    redirectClose: layerok/posterpos/promotion
+    form: $/layerok/posterpos/models/promotion/fields.yaml
+
+
+# Preview page
+# preview:
+#    title: backend::lang.form.preview_title

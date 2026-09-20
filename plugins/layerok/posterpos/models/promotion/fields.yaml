@@ -1,0 +1,24 @@
+# ===================================
+#  Form Field Definitions
+# ===================================
+
+fields:
+    header:
+        label: Заголовок
+        span: full
+        required: true
+    text:
+        label: Текст
+        type: textarea
+        size: large
+        span: full
+    image:
+        label: Изображение
+        type: fileupload
+        mode: image
+        span: left
+    published:
+        label: Опубликовано
+        type: switch
+        span: left
+        default: true

@@ -4,68 +4,114 @@ namespace Layerok\Restapi\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
-use Layerok\PosterPos\Models\PendingBonus;
-use Layerok\PosterPos\Models\User;
+use RainLab\User\Models\User;
+use Layerok\RestApi\Models\BonusTransaction;
 use Layerok\RestApi\Models\Settings;
+use Layerok\Restapi\Services\BonusService;
 
 class BonusController extends Controller
 {
+    /**
+     * Read for the register app: how much of this online order is paid by points.
+     *
+     * Only answers for orders whose points actually left the client's Poster
+     * balance, so a failed write-off never turns into a discount on the bill.
+     * Purely a read, so the register may retry it freely.
+     */
     public function fetch(): JsonResponse
     {
-
         $secret = input('secret');
         $order_id = input('order_id');
 
-        if (!isset($secret)) {
-            return response()->json(null, 403);
-        }
-        if ($secret !== env('BONUSES_SECRET')) {
+        if (!isset($secret) || $secret !== env('BONUSES_SECRET')) {
             return response()->json(null, 403);
         }
 
-        $order = PendingBonus::where('order_id', $order_id)->first();
-        if (!$order || $order->pending == false) {
+        $row = BonusTransaction::where('incoming_order_id', $order_id)
+            ->whereIn('status', BonusTransaction::SPENT_STATUSES)
+            ->first();
+
+        if (!$row) {
             return response()->json(null, 404);
         }
-        $to_use = $order->use_bonus_amount;
-        $to_receive = $order->receive_bonus_amount;
 
-        $order->pending = false;
-        $user = User::where('id', $order->user_id)->first();
-        $user->bonus_amount += $to_receive;
-        $order->save();
-        $user->save();
-        return response()->json(['to_use' => $to_use, 'to_receive' => $to_receive]);
+        return response()->json(['to_use' => $row->amount]);
     }
+
+    /**
+     * The client's balance. Points are written off at placement, so the number
+     * Poster reports already excludes orders in flight.
+     */
+    public function balance(): JsonResponse
+    {
+        /** @var User $user */
+        $user = app('JWTGuard')->user();
+        $service = new BonusService();
+
+        if (!$service->enabled()) {
+            return response()->json([
+                'enabled' => false,
+                'balance' => 0,
+                'reserved' => 0,
+                'available' => 0,
+            ]);
+        }
+
+        $balance = $service->balanceFor($user);
+
+        return response()->json([
+            'enabled' => true,
+            'balance' => $balance,
+            // Kept for the clients that still read them; nothing is held back now.
+            'reserved' => 0,
+            'available' => $balance,
+        ]);
+    }
+
+    /**
+     * Movements caused by this client's online orders, newest first.
+     * Rows where nothing left the balance (pending, failed) are not shown.
+     */
     public function history(): JsonResponse
     {
-        $jwtGuard = app('JWTGuard');
         /** @var User $user */
-        $user = $jwtGuard->user();
-        $userId = $user->id;
-        $bonuses = PendingBonus::where('user_id', $userId)
-            ->orderBy('updated_at', 'desc')
-            ->get()
-            ->map(function ($bonus) { //Пока заказ не подтвержден не показываем в истории что бонусы были получены
-                if ($bonus->pending) {
-                    $bonus->receive_bonus_amount = 0;
-                }
-                return $bonus;
-            });
-        // $bonuses = PendingBonus::where('user_id', $userId)
-        //     ->where('pending', false)
-        //     ->orderBy('updated_at', 'desc')
-        //     ->get();
+        $user = app('JWTGuard')->user();
 
-        return response()->json($bonuses);
+        $visible = array_merge(
+            BonusTransaction::SPENT_STATUSES,
+            [BonusTransaction::STATUS_REFUNDED, BonusTransaction::STATUS_EXTERNAL]
+        );
+
+        $rows = BonusTransaction::forUser($user->id)
+            ->whereIn('status', $visible)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn(BonusTransaction $row) => [
+                'id' => $row->id,
+                'date' => optional($row->created_at)->toIso8601String(),
+                'order_id' => $row->incoming_order_id ?? $row->online_order_id,
+                'delta' => $row->delta ?? (-1 * $row->amount),
+                'balance_after' => $row->balance_after,
+                'status' => $row->status,
+                'refunded' => $row->status === BonusTransaction::STATUS_REFUNDED,
+            ]);
+
+        return response()->json($rows);
     }
+
+    /**
+     * Public bonus configuration. The frontend computes the spendable cap itself,
+     * so it needs both the percentage and the categories that do not count towards
+     * it — the backend re-checks the same rule when the order is placed.
+     */
     public function options(): JsonResponse
     {
-        $enabled = (bool) Settings::get('bonus_enabled');
-        $rate = Settings::get('bonus_rate') / 100;
-        $max = Settings::get('max_bonus') / 100;
-        $bonus = (bool) Settings::get('get_bonus_from_used_bonus');
+        $service = new BonusService();
 
-        return response()->json(['bonus_enabled' => $enabled, 'bonus_rate' => $rate, 'max_bonus' => $max, 'get_bonus_from_used_bonus' => $bonus]);
+        return response()->json([
+            'bonus_enabled' => $service->enabled(),
+            'max_bonus' => (int) Settings::get('max_bonus'),
+            'excluded_category_ids' => $service->excludedCategoryIds()->all(),
+        ]);
     }
 }

@@ -19,6 +19,7 @@ use Layerok\Restapi\Http\Controllers\OrderControllerV2;
 use poster\src\PosterApi;
 use Layerok\PosterPos\Classes\ShippingMethodCode;
 use OFFLINE\Mall\Models\PaymentMethod;
+use Layerok\Restapi\Services\BonusService;
 
 use Redirect;
 
@@ -44,20 +45,31 @@ class WayForPayController
         }
         $credential = new AccountSecretCredential($merchantAccount, $merchantSecretKey);
 
-        try {
-            $handler = new ServiceUrlHandler($credential);
-            $response = $handler->parseRequestFromPostRaw();
+        $handler = new ServiceUrlHandler($credential);
 
+        try {
+            $response = $handler->parseRequestFromPostRaw();
             $transaction = $response->getTransaction();
-            $this->notify($spot, $transaction);
-            $logMessage = sprintf(
-                '[WAYFORPAY] Status of order #%s  %s',
-                $transaction->getOrderReference(),
-                $transaction->getStatus()
-            );
-            Log::channel('single')->debug($logMessage);
         } catch (WayForPaySDKException $e) {
+            // A malformed body or a signature that does not match this spot's
+            // credentials. Report it instead of falling through to an undefined
+            // $transaction, which hid the real reason.
+            Log::channel('single')->error('[WAYFORPAY] callback rejected: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 400);
         }
+
+        $this->notify($spot, $transaction);
+
+        Log::channel('single')->debug(sprintf(
+            '[WAYFORPAY] Status of order #%s  %s',
+            $transaction->getOrderReference(),
+            $transaction->getStatus()
+        ));
+
         return $handler->getSuccessResponse($transaction);
     }
 
@@ -75,6 +87,7 @@ class WayForPayController
             $order->poster_id = $poster_id;
 
             $order->save();
+            $this->attachPosterOrderToBonuses($order, $poster_id);
 
 
             $message = sprintf(
@@ -97,6 +110,7 @@ class WayForPayController
             $order = OnlineOrder::where('online_payment_id', $transaction->getOrderReference())->first();
             $order->status = OnlineOrderStatus::REFUND;
             $order->save();
+            $this->refundBonuses($order, "Payment refunded");
             $message = sprintf(
                 "Платіж повернуто \nСума: %s %s \nНомер замовлення: %s",
                 $transaction->getAmount(),
@@ -107,6 +121,7 @@ class WayForPayController
             $order = OnlineOrder::where('online_payment_id', $transaction->getOrderReference())->first();
             $order->status = OnlineOrderStatus::CANCELLED;
             $order->save();
+            $this->refundBonuses($order, "Payment declined");
             $message = sprintf(
                 "Платіж скасовано \nСума: %s %s \nНомер замовлення: %s",
                 $transaction->getAmount(),
@@ -117,6 +132,7 @@ class WayForPayController
             $order = OnlineOrder::where('online_payment_id', $transaction->getOrderReference())->first();
             $order->status = OnlineOrderStatus::EXPIRED;
             $order->save();
+            $this->refundBonuses($order, "Payment expired");
             $message = sprintf(
                 "❌ Час на оплату вичерпано \nСума: %s %s \nНомер замовлення: %s",
                 $transaction->getAmount(),
@@ -237,6 +253,55 @@ class WayForPayController
         $baseUrl = WayforpaySettings::get('status_url');
         return Redirect::to($baseUrl . '?' . http_build_query($params));
     }
+    /**
+     * Links the write-off made at checkout to the order Poster has now created, so
+     * that the register can read the discount and the transaction webhook can mark
+     * the write-off final. Failures are logged rather than thrown: the payment is
+     * already taken, so the order must still go ahead.
+     */
+    private function attachPosterOrderToBonuses(OnlineOrder $order, $posterOrderId): void
+    {
+        if (!$posterOrderId) {
+            return;
+        }
+
+        try {
+            $row = (new BonusService())->appliedForOnlineOrder((int) $order->id);
+
+            if ($row) {
+                $row->incoming_order_id = (int) $posterOrderId;
+                $row->save();
+            }
+        } catch (\Throwable $e) {
+            Log::error('Linking bonus write-off to Poster order failed', [
+                'online_order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Payment was refunded, so the points go back — but only while the write-off
+     * is still open. A bill already closed on the register is left for manual
+     * handling, since the discount has been rung up.
+     */
+    private function refundBonuses(OnlineOrder $order, string $note): void
+    {
+        try {
+            $service = new BonusService();
+            $row = $service->appliedForOnlineOrder((int) $order->id);
+
+            if ($row) {
+                $service->refund($row, $note);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Bonus refund after payment refund failed', [
+                'online_order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function sendPosterOrder($real_spot_id, $order_id)
     {
 
@@ -251,6 +316,12 @@ class WayForPayController
             'access_token' => $poster_account->access_token,
         ]);
 
+        // The client was charged the total less any points they spent, so the
+        // prepayment reported to Poster must match. The register adds the points
+        // back as a setOrderBonus line and the bill balances.
+        $bonusRow = (new BonusService())->appliedForOnlineOrder((int) $order->id);
+        $paidSum = $order->total + $order->delivery_price - ($bonusRow->amount ?? 0);
+
         $incomingOrder = [
             'spot_id' => $order->spot_id,
             'phone' => $order->phone,
@@ -261,7 +332,7 @@ class WayForPayController
             'service_mode' => $order->service_mode,
             'address' => $order->address,
             'delivery_price' => $order->delivery_price,
-            'payment'  => ['type' => 1, 'sum' => $order->total + $order->delivery_price, 'currency' => 'UAH']
+            'payment'  => ['type' => 1, 'sum' => $paidSum, 'currency' => 'UAH']
         ];
 
 
@@ -283,7 +354,9 @@ class WayForPayController
                     json_decode($order->cart, true),
                     ShippingMethod::where('code', ShippingMethodCode::COURIER)->first(),
                     PaymentMethod::where('code', 'wayforpay')->first(),
-                    $order
+                    $order,
+                    null,
+                    (int) ($bonusRow->amount ?? 0)
                 ),
                 'parse_mode' => "html",
                 'chat_id' => $spot->chat->internal_id
