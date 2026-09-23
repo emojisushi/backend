@@ -712,7 +712,7 @@ class OrderControllerV2 extends Controller
             )
             ->field(
                 trans('layerok.restapi::lang.receipt.address'),
-                htmlspecialchars($data['address'])
+                htmlspecialchars($data['address'] ?? '')
             )
             ->field(
                 trans('layerok.restapi::lang.receipt.payment_method'),
