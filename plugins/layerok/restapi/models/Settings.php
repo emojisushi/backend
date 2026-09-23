@@ -19,6 +19,7 @@ class Settings extends Model
 
     public $rules = [
         'bonus_enabled' => 'required|boolean',
+        'bonus_enabled_web' => 'required|boolean',
         'max_bonus' => 'required|integer|min:0|max:100',
     ];
 

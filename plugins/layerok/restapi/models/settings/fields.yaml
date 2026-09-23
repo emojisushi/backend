@@ -1,7 +1,11 @@
 fields:
     bonus_enabled:
-        label: "Бонусы включены"
-        comment: "Баллы начисляет Poster. Бэкенд только списывает их при закрытии заказа."
+        label: "Бонусы включены в мобильном приложении"
+        type: switch
+        span: left
+        default: false
+    bonus_enabled_web:
+        label: "Бонусы включены на сайте"
         type: switch
         span: left
         default: false
@@ -13,17 +17,9 @@ fields:
         min: 0
         max: 100
         default: 20
-        trigger:
-            action: enable
-            field: bonus_enabled
-            condition: checked
     bonus_excluded_categories:
         label: "Категории, которые не учитываются при оплате бонусами"
         comment: "Стоимость товаров из этих категорий не входит в базу для расчёта лимита бонусов."
         type: checkboxlist
         span: full
         options: getBonusExcludedCategoriesOptions
-        trigger:
-            action: enable
-            field: bonus_enabled
-            condition: checked
