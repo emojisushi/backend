@@ -23,7 +23,9 @@ class BonusController extends Controller
         $secret = input('secret');
         $order_id = input('order_id');
 
-        if (!isset($secret) || $secret !== env('BONUSES_SECRET')) {
+        $expected = config('bonus.secret');
+
+        if (empty($expected) || $secret !== $expected) {
             return response()->json(null, 403);
         }
 
