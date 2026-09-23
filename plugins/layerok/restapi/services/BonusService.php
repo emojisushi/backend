@@ -20,9 +20,33 @@ use poster\src\PosterApi;
  */
 class BonusService
 {
+    /** Bonuses are usable on at least one platform. */
     public function enabled(): bool
     {
+        return $this->enabledForMobile() || $this->enabledForWeb();
+    }
+
+    public function enabledForMobile(): bool
+    {
         return (bool) Settings::get('bonus_enabled');
+    }
+
+    public function enabledForWeb(): bool
+    {
+        return (bool) Settings::get('bonus_enabled_web');
+    }
+
+    /**
+     * Whether the client placing this order may spend points.
+     *
+     * The mobile app marks its requests with `mobile`, so an app version with a
+     * broken implementation can be switched off while the site keeps working.
+     */
+    public function enabledForRequest(array $data): bool
+    {
+        return !empty($data['mobile'])
+            ? $this->enabledForMobile()
+            : $this->enabledForWeb();
     }
 
     /**

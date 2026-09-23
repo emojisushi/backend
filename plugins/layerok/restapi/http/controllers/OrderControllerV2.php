@@ -272,7 +272,7 @@ class OrderControllerV2 extends Controller
             $bonusService = new BonusService();
 
             if (isset($data['bonuses_to_use'])) {
-                if (!$bonusService->enabled()) {
+                if (!$bonusService->enabledForRequest($data)) {
                     return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => ['Bonuses are disabled']]], 400);
                 }
                 $usedBonus = (int) $data['bonuses_to_use'];

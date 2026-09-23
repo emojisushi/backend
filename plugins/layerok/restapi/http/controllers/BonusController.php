@@ -109,7 +109,9 @@ class BonusController extends Controller
         $service = new BonusService();
 
         return response()->json([
-            'bonus_enabled' => $service->enabled(),
+            // Existing key stays the mobile flag, so older app builds are unaffected.
+            'bonus_enabled' => $service->enabledForMobile(),
+            'bonus_enabled_web' => $service->enabledForWeb(),
             'max_bonus' => (int) Settings::get('max_bonus'),
             'excluded_category_ids' => $service->excludedCategoryIds()->all(),
         ]);
