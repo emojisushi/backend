@@ -48,7 +48,7 @@ class PosterWebhookController
         // повторил вебхук — списание не должно потеряться.
         try {
             if ($postData['object'] === 'incoming_order') {
-                $this->handleIncomingOrder((int) $postData['object_id']);
+                $this->handleIncomingOrder((int) $postData['object_id'], $postData['action'] ?? '');
             }
 
             // 'client' fires on a manual edit, 'client_payed_sum' when a bill closes
@@ -65,7 +65,11 @@ class PosterWebhookController
             }
 
             if ($postData['object'] === 'transaction') {
-                $this->handleTransaction((int) $postData['object_id']);
+                $this->handleTransaction(
+                    (int) $postData['object_id'],
+                    $postData['action'] ?? '',
+                    $postData['data'] ?? null
+                );
             }
         } catch (\Throwable $e) {
             Log::error('Bonus webhook failed', [
@@ -99,13 +103,21 @@ class PosterWebhookController
      * Запоминаем, в какой чек превратился онлайн-заказ, чтобы вебхук транзакции
      * нашёл списание при закрытии. Отменённый заказ возвращает бонусы клиенту.
      */
-    private function handleIncomingOrder(int $incomingOrderId): void
+    private function handleIncomingOrder(int $incomingOrderId, string $action = ''): void
     {
         $row = BonusTransaction::where('incoming_order_id', $incomingOrderId)
             ->where('status', BonusTransaction::STATUS_APPLIED)
             ->first();
 
         if (!$row) {
+            return;
+        }
+
+        // A deleted online order will not come back, and the lookup below may no
+        // longer resolve it, so refund straight from the webhook action.
+        if ($action === 'removed') {
+            (new BonusService())->refund($row, 'Online order removed in Poster');
+
             return;
         }
 
@@ -136,13 +148,30 @@ class PosterWebhookController
     /**
      * Чек закрыт — списание становится окончательным. Удалённый чек возвращает бонусы.
      */
-    private function handleTransaction(int $transactionId): void
+    private function handleTransaction(int $transactionId, string $action = '', $rawData = null): void
     {
         $row = BonusTransaction::where('transaction_id', $transactionId)
             ->where('status', BonusTransaction::STATUS_APPLIED)
             ->first();
 
         if (!$row) {
+            return;
+        }
+
+        // A deleted order will not come back, and the lookup below may no longer
+        // resolve it, so refund straight from the webhook action.
+        if ($action === 'removed') {
+            (new BonusService())->refund($row, 'Order removed in Poster');
+
+            return;
+        }
+
+        // Cancelling is not a removal: Poster sends action "changed" with a
+        // changeorderstatus entry (value 4 = cancelled), and dash.getTransaction
+        // still reports the order as open, so the status check below misses it.
+        if ($this->isCancellation($rawData)) {
+            (new BonusService())->refund($row, 'Order cancelled in Poster');
+
             return;
         }
 
@@ -169,6 +198,24 @@ class PosterWebhookController
         if ($status === 2) {
             (new BonusService())->settle($row);
         }
+    }
+
+    /**
+     * Whether a transaction webhook describes the order being cancelled.
+     * The detail lives in the history entry Poster attaches as `data`.
+     */
+    private function isCancellation($rawData): bool
+    {
+        if (empty($rawData)) {
+            return false;
+        }
+
+        $data = is_array($rawData) ? $rawData : json_decode((string) $rawData, true);
+        $history = $data['transactions_history'] ?? null;
+
+        return is_array($history)
+            && ($history['type_history'] ?? null) === 'changeorderstatus'
+            && (int) ($history['value'] ?? 0) === 4;
     }
 
     private function handleDish(array $postData): void
