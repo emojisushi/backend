@@ -203,8 +203,18 @@ class OrderControllerV2 extends Controller
                 [trans('layerok.restapi::lang.receipt.training_sticks_amount'), $data['training_sticks'] ?? null],
             ];
 
+        // The register reads the bonus amount off the end of this comment, so the
+        // client's own text must not be able to contain that marker — otherwise a
+        // customer could type it in and grant themselves a discount.
+        $bonusLabel = trans('layerok.restapi::lang.receipt.bonuses_used');
+        $clientComment = preg_replace(
+            '/' . preg_quote($bonusLabel, '/') . '\s*:?\s*[\d.,]*\s*₴?/ui',
+            '',
+            (string) ($data['comment'] ?? '')
+        );
+
         $posterComment = collect(array_merge([
-            ['', $data['comment']],
+            ['', trim($clientComment)],
             [trans('layerok.restapi::lang.receipt.change'), $data['change']],
             [trans('layerok.restapi::lang.receipt.payment_method'), $paymentMethod->name],
         ], $cutleryComments))
