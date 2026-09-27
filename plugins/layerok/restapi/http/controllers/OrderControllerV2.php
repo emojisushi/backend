@@ -277,9 +277,16 @@ class OrderControllerV2 extends Controller
         }
 
         $usedBonus = 0;
+        $bonusUser = $user;
+        $bonusClientId = null;
+
         if ($user) {
-            // validated below; stays 0 for guests and for orders without bonuses
             $bonusService = new BonusService();
+
+            // A call centre operator orders for someone else, so the points come
+            // from the phone on the order rather than the operator's account.
+            $bonusPhone = $bonusService->subjectPhone($user, $data);
+            $bonusUser = $bonusService->findUserByPhone($bonusPhone) ?? $user;
 
             if (isset($data['bonuses_to_use'])) {
                 if (!$bonusService->enabledForRequest($data)) {
@@ -292,7 +299,9 @@ class OrderControllerV2 extends Controller
             }
 
             if ($usedBonus > 0) {
-                if ($usedBonus > $bonusService->balanceFor($user)) {
+                $bonusClientId = $bonusService->findClientId($bonusPhone);
+
+                if ($usedBonus > $bonusService->posterBalance($bonusClientId)) {
                     return response()->json('Not enough bonuses', 400);
                 }
 
@@ -349,7 +358,7 @@ class OrderControllerV2 extends Controller
             // payment gives them back from the WayForPay service-url handler.
             if ($user && $usedBonus > 0) {
                 $service = new BonusService();
-                $row = $service->reserve($user, $usedBonus, (int) $order->id);
+                $row = $service->reserve($bonusUser, $usedBonus, (int) $order->id, null, $bonusClientId);
 
                 // If Poster did not actually take the points, do not discount the
                 // charge — the client would pay less and keep the points.
@@ -580,7 +589,7 @@ class OrderControllerV2 extends Controller
             // everywhere — including the register — before the client can order again.
             // A rejected order gives them back via the Poster webhook.
             if ($usedBonus > 0) {
-                (new BonusService())->apply($user, $usedBonus, (int) $poster_order_id);
+                (new BonusService())->apply($bonusUser, $usedBonus, (int) $poster_order_id, $bonusClientId);
             }
         }
 

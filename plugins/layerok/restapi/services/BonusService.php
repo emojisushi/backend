@@ -71,6 +71,30 @@ class BonusService
     }
 
     /**
+    /**
+     * Whose points an order spends.
+     *
+     * A call centre operator places orders on behalf of customers, so the points
+     * come from the phone on the order rather than the operator's own account.
+     */
+    public function subjectPhone($user, array $data): ?string
+    {
+        if ($user && method_exists($user, 'isCallCenterAdmin') && $user->isCallCenterAdmin()) {
+            return $data['phone'] ?? null;
+        }
+
+        return $user->phone ?? null;
+    }
+
+    /**
+     * Balance held by whoever owns this phone number, 0 when Poster has no client.
+     */
+    public function balanceForPhone(?string $phone): int
+    {
+        return $this->posterBalance($this->findClientId($phone));
+    }
+
+    /**
      * What the client may spend. Write-offs happen at placement, so Poster's
      * balance already excludes points committed to orders in flight.
      */
@@ -378,7 +402,7 @@ class BonusService
      * Matches a Poster phone against our users. Poster formats numbers freely, so
      * the comparison is made on digits, falling back to the subscriber number.
      */
-    private function findUserByPhone(?string $phone): ?User
+    public function findUserByPhone(?string $phone): ?User
     {
         $digits = preg_replace('/\D/', '', (string) $phone);
 

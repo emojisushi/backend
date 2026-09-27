@@ -5,6 +5,7 @@ namespace Layerok\Restapi\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use RainLab\User\Models\User;
+use Layerok\PosterPos\Models\User as PosterUser;
 use Layerok\RestApi\Models\BonusTransaction;
 use Layerok\RestApi\Models\Settings;
 use Layerok\Restapi\Services\BonusService;
@@ -99,6 +100,38 @@ class BonusController extends Controller
             ]);
 
         return response()->json($rows);
+    }
+
+    /**
+     * Bonus information for an arbitrary client, for call centre operators who
+     * place orders on someone else's behalf. Restricted to those accounts — an
+     * ordinary user must not be able to read another client's balance.
+     */
+    public function client(): JsonResponse
+    {
+        $jwtUser = app('JWTGuard')->user();
+        $operator = $jwtUser ? PosterUser::find($jwtUser->id) : null;
+
+        if (!$operator || !$operator->isCallCenterAdmin()) {
+            return response()->json(null, 403);
+        }
+
+        $phone = input('phone');
+
+        if (empty($phone)) {
+            return response()->json(['message' => 'Error', 'errors' => ['phone' => ['Phone is required']]], 400);
+        }
+
+        $service = new BonusService();
+        $clientId = $service->findClientId($phone);
+
+        return response()->json([
+            'found' => (bool) $clientId,
+            'client_id' => $clientId,
+            'balance' => $clientId ? $service->posterBalance($clientId) : 0,
+            'max_bonus' => (int) Settings::get('max_bonus'),
+            'excluded_category_ids' => $service->excludedCategoryIds()->all(),
+        ]);
     }
 
     /**

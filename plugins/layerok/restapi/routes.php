@@ -113,6 +113,7 @@ Route::group([
 
         Route::post('user/customer', [CustomerController::class, 'save']);
         Route::get('user/bonus', [BonusController::class, 'balance']);
+        Route::get('bonuses/client', [BonusController::class, 'client']);
         Route::get('user/bonus/history', [BonusController::class, 'history']);
     });
 
