@@ -1,0 +1,25 @@
+fields:
+    name:
+        label: Имя
+        span: left
+        required: true
+    phone:
+        label: Телефон
+        span: right
+    poster_user_id:
+        label: Сотрудник в Poster
+        type: dropdown
+        span: left
+        emptyOption: Не выбран
+    rate_per_km:
+        label: Ставка за км, ₴
+        type: number
+        span: right
+        default: 0
+    login:
+        label: Логин
+        span: left
+    password:
+        label: Пароль
+        type: password
+        span: right

@@ -23,6 +23,7 @@ class OnlineOrder extends Model
         'spot_id',
         'delivery_price',
         'delivery_minutes',
+        'client_address',
     ];
 
 }

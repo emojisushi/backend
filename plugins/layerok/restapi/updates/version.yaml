@@ -59,3 +59,7 @@
 1.0.28:
     - 'Add bonus_transactions ledger table'
     - create_bonus_transactions_table.php
+
+1.0.29:
+    - 'Store structured client address on online orders'
+    - add_client_address_to_online_orders_table.php

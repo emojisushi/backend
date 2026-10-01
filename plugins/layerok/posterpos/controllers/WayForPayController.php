@@ -335,6 +335,15 @@ class WayForPayController
             'payment'  => ['type' => 1, 'sum' => $paidSum, 'currency' => 'UAH']
         ];
 
+        // The structured address was stored at checkout, because createIncomingOrder
+        // has no `address` parameter and only client_address reaches the delivery
+        // record — with the coordinates the delivery map needs.
+        $clientAddress = json_decode((string) $order->client_address, true);
+
+        if (is_array($clientAddress) && $clientAddress) {
+            $incomingOrder['client_address'] = $clientAddress;
+        }
+
 
         $posterResult = (object) PosterApi::incomingOrders()
             ->createIncomingOrder($incomingOrder);

@@ -1,0 +1,34 @@
+# ===================================
+#  Form Behavior Config
+# ===================================
+
+# Record name
+name: Courier
+
+# Model Form Field configuration
+form: $/layerok/posterpos/models/courier/fields.yaml
+
+# Model Class name
+modelClass: Layerok\PosterPos\Models\Courier
+
+# Default redirect location
+defaultRedirect: layerok/posterpos/courier
+
+# Create page
+create:
+    title: backend::lang.form.create_title
+    redirect: layerok/posterpos/courier/update/:id
+    redirectClose: layerok/posterpos/courier
+    form: $/layerok/posterpos/models/courier/fields.yaml
+
+# Update page
+update:
+    title: backend::lang.form.update_title
+    redirect: layerok/posterpos/courier
+    redirectClose: layerok/posterpos/courier
+    form: $/layerok/posterpos/models/courier/fields.yaml
+
+
+# Preview page
+# preview:
+#    title: backend::lang.form.preview_title

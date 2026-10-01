@@ -179,3 +179,7 @@
 1.2.11:
     - 'Add promotions table'
     - add_promotions_table.php
+
+1.2.12:
+    - 'Add couriers table'
+    - add_couriers_table.php

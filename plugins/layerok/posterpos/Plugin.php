@@ -497,9 +497,72 @@ class Plugin extends PluginBase
      *
      * @return array
      */
+    /**
+     * Without this the codes used by $requiredPermissions never appear in the role
+     * editor, so only superusers can reach these pages.
+     */
+    public function registerPermissions()
+    {
+        return [
+            'layerok.posterpos.couriers' => [
+                'tab' => 'Доставка',
+                'label' => 'Курьеры',
+            ],
+            'layerok.posterpos.delivery_map' => [
+                'tab' => 'Доставка',
+                'label' => 'Карта доставки',
+            ],
+            'layerok.posterpos.addresses' => [
+                'tab' => 'PosterPos',
+                'label' => 'Адреса и зоны доставки',
+            ],
+            'layerok.posterpos.cities' => [
+                'tab' => 'PosterPos',
+                'label' => 'Города',
+            ],
+            'layerok.posterpos.districts' => [
+                'tab' => 'PosterPos',
+                'label' => 'Районы',
+            ],
+            'layerok.posterpos.notification' => [
+                'tab' => 'PosterPos',
+                'label' => 'Push-уведомления',
+            ],
+            'layerok.posterpos.wait_time' => [
+                'tab' => 'PosterPos',
+                'label' => 'Время ожидания',
+            ],
+            'layerok.posterpos.diagnostics' => [
+                'tab' => 'PosterPos',
+                'label' => 'Диагностика',
+            ],
+        ];
+    }
+
     public function registerNavigation()
     {
         return [
+            'delivery' => [
+                'label'       => 'Доставка',
+                'url'         => Backend::url('layerok/posterpos/deliverymap'),
+                'icon'        => 'icon-map-marker',
+                'permissions' => ['layerok.posterpos.delivery_map'],
+                'order'       => 490,
+                'sideMenu' => [
+                    'delivery-map' => [
+                        'label'       => 'Карта заказов',
+                        'icon'        => 'icon-map-o',
+                        'url'         => Backend::url('layerok/posterpos/deliverymap'),
+                        'permissions' => ['layerok.posterpos.delivery_map'],
+                    ],
+                    'delivery-couriers' => [
+                        'label'       => 'Курьеры',
+                        'icon'        => 'icon-motorcycle',
+                        'url'         => Backend::url('layerok/posterpos/courier'),
+                        'permissions' => ['layerok.posterpos.couriers'],
+                    ],
+                ],
+            ],
             'posterpos' => [
                 'label'       => 'PosterPos',
                 'url'         => Backend::url('layerok/posterpos/mycontroller'),

@@ -1,0 +1,50 @@
+<div class="delivery-map-screen">
+    <div class="dm-toolbar">
+        <div class="dm-field">
+            <label>Заведение</label>
+            <select id="dmSpot" class="form-control">
+                <?php foreach ($spots as $spot): ?>
+                    <option value="<?= $spot->id ?>"><?= e($spot->name) ?></option>
+                <?php endforeach ?>
+            </select>
+        </div>
+        <div class="dm-field">
+            <label>Дата</label>
+            <input id="dmDate" type="date" class="form-control" value="<?= e($today) ?>">
+        </div>
+        <div class="dm-field dm-field-grow">
+            <label>Курьер</label>
+            <select id="dmCourier" class="form-control">
+                <option value="all">Все курьеры</option>
+                <option value="unassigned">Без курьера</option>
+            </select>
+        </div>
+        <div class="dm-actions">
+            <span class="dm-updated" id="dmUpdated"></span>
+            <button type="button" class="btn btn-default" id="dmToggleZones">Скрыть зоны</button>
+            <button type="button" class="btn btn-default" id="dmRefresh">↻ Обновить</button>
+        </div>
+    </div>
+
+    <div class="dm-body">
+        <aside class="dm-orders">
+            <div class="dm-orders-head">
+                <b>Открытые чеки</b>
+                <span class="dm-count" id="dmCount">—</span>
+            </div>
+            <div class="dm-legend">
+                <?php if (!empty($showPendingAccept)): ?>
+                    <span><i class="dm-dot dm-dot-pendingaccept"></i>Не принят</span>
+                <?php endif ?>
+                <span><i class="dm-dot dm-dot-pending"></i>Не назначен</span>
+                <span><i class="dm-dot dm-dot-assigned"></i>Курьер назначен</span>
+            </div>
+            <div class="dm-orders-scroll" id="dmOrders">
+                <div class="dm-empty">Загрузка…</div>
+            </div>
+        </aside>
+        <div class="dm-map-wrap">
+            <div id="dmMap"></div>
+        </div>
+    </div>
+</div>
