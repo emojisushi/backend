@@ -625,10 +625,35 @@ function focusOn(recordId) {
 $(document).on("render", function () {
     const mapContainer = document.getElementById("address-map");
     if (!mapContainer) return;
+
+    // The backend swaps pages over AJAX, so this fires again on every navigation.
+    // Re-using a map bound to a replaced container renders nothing, and building a
+    // second one on the same element throws "Map container is already initialized",
+    // which leaves the whole page stuck. Discard the old instance first.
+    if (map) {
+        if (map.getContainer() === mapContainer) {
+            map.invalidateSize();
+            return;
+        }
+
+        try {
+            map.remove();
+        } catch (e) {
+            /* container already gone */
+        }
+
+        map = null;
+    }
+
     map = L.map("address-map", { layers: [layerGroup] }).setView(
         [46.44685, 30.737],
         9,
     );
+
+    // The container is often still hidden or zero-height at this point.
+    setTimeout(function () {
+        map.invalidateSize();
+    }, 50);
     map.addControl(new addAddressControl());
     map.addControl(new selectAreaControl());
     map.addLayer(drawnItems);

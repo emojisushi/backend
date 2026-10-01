@@ -1,0 +1,14 @@
+columns:
+    name:
+        label: Курьер
+        searchable: true
+    phone:
+        label: Телефон
+        searchable: true
+    poster_user_id:
+        label: Poster ID
+    rate_per_km:
+        label: Ставка / км
+    active:
+        label: На смене
+        type: switch

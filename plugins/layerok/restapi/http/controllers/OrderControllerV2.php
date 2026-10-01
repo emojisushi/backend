@@ -76,6 +76,7 @@ class OrderControllerV2 extends Controller
         $address_id = $data['address'] ?? null;
         $mode = ServiceMode::ON_SITE;
         $area = null;
+        $clientAddress = null;
         $delivery_time = $spot->wait_minutes_spot ?? 0; //if takeaway
         if ($shippingMethod->code === ShippingMethodCode::COURIER) {
             $spotId = null;
@@ -100,6 +101,9 @@ class OrderControllerV2 extends Controller
                 $spot = Spot::find($spotId);
                 $delivery_time = $spot->wait_minutes_delivery + $area["delivery_minutes"];
                 // $incomingOrder['spot_id'] = $spot->tablet->tablet_id;
+                // Structured copy of the same address, which is what Poster stores as
+                // a real delivery address and returns with coordinates for the map.
+                $clientAddress = $this->buildClientAddress($address, $spot, $data);
                 $address = $this->formatDeliveryAddress($address, $spot, $data);
                 $data['address'] = $address;
             } else {
@@ -238,6 +242,10 @@ class OrderControllerV2 extends Controller
             'address' => $address,
             'delivery_minutes' => $delivery_time ?? null
         ];
+
+        if ($clientAddress) {
+            $incomingOrder['client_address'] = $clientAddress;
+        }
 
         $data['spot_minutes'] = $delivery_time;
         $courier_fee = null;
@@ -827,6 +835,43 @@ class OrderControllerV2 extends Controller
     }
 
     /**
+     * The same delivery address in the structured form Poster stores.
+     *
+     * createIncomingOrder has no `address` parameter — only `client_address` — so
+     * this is what actually reaches the delivery record, and the coordinates are
+     * what let the order appear on a map. They are the street's coordinates from
+     * the picked Address record; house-level precision is not available.
+     */
+    private function buildClientAddress(Address $address, ?Spot $spot, array $data): array
+    {
+        $street = collect([
+            $address->name_ua,
+            $data['house'] ?? null,
+        ])->filter(fn($part) => trim((string) $part) !== '')->join(', ');
+
+        $details = collect([
+            'Квартира' => $data['apartment'] ?? null,
+            "Під'їзд" => $data['entrance'] ?? null,
+            'Поверх' => $data['floor'] ?? null,
+        ])->filter(fn($value) => trim((string) $value) !== '')
+            ->map(fn($value, $label) => $label . ': ' . $value)
+            ->join(', ');
+
+        $place = collect([
+            $spot ? optional($spot->city)->name : null,
+            $address->suburb_ua,
+        ])->filter(fn($part) => trim((string) $part) !== '')->join(', ');
+
+        return array_filter([
+            'address1' => $street,
+            'address2' => $details,
+            'comment' => $place,
+            'lat' => $address->lat !== null ? (float) $address->lat : null,
+            'lng' => $address->lon !== null ? (float) $address->lon : null,
+        ], fn($value) => $value !== null && $value !== '');
+    }
+
+    /**
      * Composes the delivery address as a single line, e.g.
      * "вулиця Академіка Сахарова, 40/1, Одеса, Котовського, Квартира: 39, Під'їзд: 1, Поверх: 10"
      *
@@ -931,7 +976,8 @@ class OrderControllerV2 extends Controller
             'cart'              => json_encode($cart),
             'real_spot_id'      => $real_spot_id,
             'delivery_price'    => $data['delivery_price'],
-            'delivery_minutes'  => $data['delivery_minutes']
+            'delivery_minutes'  => $data['delivery_minutes'],
+            'client_address'    => isset($data['client_address']) ? json_encode($data['client_address']) : null
         ];
 
         // Create and return the order

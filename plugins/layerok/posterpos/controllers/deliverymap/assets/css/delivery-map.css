@@ -1,0 +1,68 @@
+.delivery-map-screen { display: flex; flex-direction: column; gap: 12px; }
+
+.dm-toolbar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.dm-field { display: flex; flex-direction: column; gap: 4px; min-width: 170px; }
+.dm-field-grow { flex: 1; }
+.dm-field label { font-size: 11px; font-weight: 700; color: #666; margin: 0; }
+.dm-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.dm-body { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 12px; min-height: 640px; }
+
+.dm-orders { border: 1px solid #e2e2e2; border-radius: 6px; background: #fff; display: flex; flex-direction: column; }
+.dm-orders-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid #eee; }
+.dm-count { font-size: 11px; color: #888; }
+.dm-legend { display: flex; gap: 14px; padding: 8px 14px; font-size: 11px; color: #777; border-bottom: 1px solid #eee; }
+.dm-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+.dm-dot-pending { background: #f6a700; }
+.dm-dot-assigned { background: #1fa766; }
+.dm-orders-scroll { flex: 1; overflow: auto; padding: 10px; max-height: 640px; }
+.dm-empty { padding: 20px; text-align: center; color: #999; font-size: 12px; }
+
+.dm-order { border: 1px solid #e6e6e6; border-left: 4px solid #f6a700; border-radius: 6px; padding: 10px; margin-bottom: 8px; cursor: pointer; }
+.dm-order:hover, .dm-order.active { border-color: #111; }
+.dm-order.assigned { border-left-color: #1fa766; }
+.dm-order-top { display: flex; justify-content: space-between; gap: 8px; }
+.dm-order-num { font-weight: 700; }
+.dm-order-due { font-size: 11px; background: #f3f3f3; border-radius: 4px; padding: 2px 6px; }
+.dm-order-address { font-size: 12px; margin: 6px 0 4px; line-height: 1.35; }
+.dm-order-meta { display: flex; justify-content: space-between; font-size: 11px; color: #888; gap: 8px; }
+.dm-order-courier { display: inline-block; margin-top: 7px; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 4px; background: #eaf8f1; color: #177b4e; }
+.dm-order-courier.none { background: #fff5d7; color: #936200; }
+
+.dm-map-wrap { border: 1px solid #e2e2e2; border-radius: 6px; overflow: hidden; }
+#dmMap { width: 100%; height: 640px; }
+
+@media (max-width: 1100px) {
+    .dm-body { grid-template-columns: 1fr; }
+    #dmMap { height: 460px; }
+}
+
+/* popup */
+.dm-popup-wrap .leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 14px 40px rgba(17,17,17,.14); }
+.dm-popup-wrap .leaflet-popup-content { margin: 14px 15px; }
+
+.dm-popup-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.dm-popup-eyebrow { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; font-weight: 800; color: #8a8a8a; margin-bottom: 3px; }
+.dm-popup-client { font-size: 15px; font-weight: 800; line-height: 1.2; }
+.dm-popup-pill { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+.dm-popup-pill.ok { background: #eaf8f1; color: #177a4c; }
+.dm-popup-pill.warn { background: #fff5d7; color: #8d6000; }
+
+.dm-popup-address { font-size: 12px; font-weight: 650; line-height: 1.4; margin: 10px 0 0; }
+
+.dm-popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 11px; }
+.dm-popup-field { background: #f7f7f5; border-radius: 9px; padding: 8px 9px; }
+.dm-popup-field small { display: block; color: #8a8a8a; font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: .04em; margin-bottom: 3px; }
+.dm-popup-field b { font-size: 12px; }
+
+.dm-updated { font-size: 11px; color: #999; align-self: center; margin-right: 4px; }
+
+/* comment occupies the full row but keeps the same grey card as the other fields */
+.dm-popup-field-wide { grid-column: 1 / -1; }
+.dm-popup-field-wide b { font-weight: 650; line-height: 1.45; display: block; max-height: 96px; overflow: auto; word-break: break-word; }
+
+/* orders the register has not accepted yet */
+.dm-order.pending { border-left-color: #8e8e93; }
+.dm-order-courier.pending { background: #ececf0; color: #4a4a4f; }
+.dm-popup-pill.pending { background: #ececf0; color: #4a4a4f; }
+.dm-dot-pendingaccept { background: #8e8e93; }
