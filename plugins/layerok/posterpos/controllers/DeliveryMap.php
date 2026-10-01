@@ -56,10 +56,14 @@ class DeliveryMap extends Controller
     /**
      * Asset URL stamped with the file's modified time, so an edited stylesheet is
      * never served from the browser cache after a deploy.
+     *
+     * These live in the plugin's own assets directory on purpose: october:mirror
+     * only symlinks plugins/[vendor]/[plugin]/assets into the public folder, so anything
+     * under controllers/[name]/assets is a 404 on a mirrored deployment.
      */
     private function asset(string $relative): string
     {
-        $path = '/plugins/layerok/posterpos/controllers/deliverymap/assets/' . $relative;
+        $path = '/plugins/layerok/posterpos/assets/' . $relative;
         $file = base_path(ltrim($path, '/'));
 
         return $path . (file_exists($file) ? '?v=' . filemtime($file) : '');
