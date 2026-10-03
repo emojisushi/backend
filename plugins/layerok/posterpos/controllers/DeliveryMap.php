@@ -2,6 +2,7 @@
 
 use BackendMenu;
 use Backend\Classes\Controller;
+use Layerok\PosterPos\Classes\GeocodeService;
 use Illuminate\Support\Facades\Log;
 use Layerok\PosterPos\Models\Address;
 use Layerok\PosterPos\Models\Area;
@@ -26,6 +27,8 @@ class DeliveryMap extends Controller
      */
     private const SHOW_PENDING_ACCEPT = false;
 
+    private ?GeocodeService $geocoder = null;
+
     public $requiredPermissions = ['layerok.posterpos.delivery_map'];
 
     public function __construct()
@@ -44,7 +47,8 @@ class DeliveryMap extends Controller
         $this->addJs($this->asset('js/delivery-map.js'), ['defer' => true]);
         $this->addCss($this->asset('css/delivery-map.css'));
 
-        $this->vars['spots'] = Spot::orderBy('name')->get();
+        // Unpublished spots are not serving customers, so they are not worth filtering by.
+        $this->vars['spots'] = Spot::where('published', true)->orderBy('name')->get();
         $this->vars['today'] = date('Y-m-d');
         $this->vars['showPendingAccept'] = self::SHOW_PENDING_ACCEPT;
     }
@@ -169,7 +173,10 @@ class DeliveryMap extends Controller
     {
         $line = (string) ($order->address ?? '');
         $street = $this->streetFromLine($line);
-        $point = $street !== null && isset($coords[$street]) ? $coords[$street] : ['lat' => null, 'lng' => null];
+        // No delivery record on an unaccepted order, so only the street is known.
+        $point = $street !== null && isset($coords[$street])
+            ? $coords[$street] + ['source' => 'street']
+            : ['lat' => null, 'lng' => null, 'source' => null];
 
         $client = collect([$order->first_name ?? null, $order->last_name ?? null])
             ->filter(fn($part) => trim((string) $part) !== '')
@@ -189,6 +196,7 @@ class DeliveryMap extends Controller
             'comment' => trim((string) ($order->comment ?? '')),
             'due' => !empty($order->created_at) ? date('H:i', strtotime($order->created_at)) : '',
             'lat' => $point['lat'],
+            'location_source' => $point['source'] ?? null,
             'lng' => $point['lng'],
             'courier_id' => null,
             'courier' => null,
@@ -230,6 +238,7 @@ class DeliveryMap extends Controller
             'comment' => trim((string) ($transaction->transaction_comment ?? '')),
             'due' => !empty($delivery->delivery_time) ? date('H:i', strtotime($delivery->delivery_time)) : '',
             'lat' => $point['lat'],
+            'location_source' => $point['source'] ?? null,
             'lng' => $point['lng'],
             'courier_id' => $courierId ?: null,
             'courier' => $courierId ? ($couriers[$courierId] ?? ('ID ' . $courierId)) : null,
@@ -241,6 +250,14 @@ class DeliveryMap extends Controller
      * matched back against our own address book, which is where the coordinates
      * came from in the first place. Street level, not house level.
      */
+    /**
+     * Coordinates for the streets these orders are on.
+     *
+     * Several streets share a name across the city, so every record is indexed
+     * both by "street|suburb" and by street alone. The caller tries the specific
+     * key first; the bare street is only a last resort and may be the wrong one
+     * of a set of namesakes.
+     */
     private function streetCoordinates($streets): array
     {
         $streets = collect($streets)->filter()->unique()->values();
@@ -249,15 +266,38 @@ class DeliveryMap extends Controller
             return [];
         }
 
-        return Address::whereIn('name_ua', $streets->all())
-            ->get(['name_ua', 'lat', 'lon'])
-            ->mapWithKeys(fn(Address $address) => [
-                $address->name_ua => [
-                    'lat' => $address->lat !== null ? (float) $address->lat : null,
-                    'lng' => $address->lon !== null ? (float) $address->lon : null,
-                ],
-            ])
-            ->all();
+        $coords = [];
+
+        foreach (Address::whereIn('name_ua', $streets->all())->get(['name_ua', 'suburb_ua', 'lat', 'lon']) as $address) {
+            $point = [
+                'lat' => $address->lat !== null ? (float) $address->lat : null,
+                'lng' => $address->lon !== null ? (float) $address->lon : null,
+            ];
+
+            $coords[$this->coordKey($address->name_ua, $address->suburb_ua)] = $point;
+
+            if (!isset($coords[$address->name_ua])) {
+                $coords[$address->name_ua] = $point;
+            }
+        }
+
+        return $coords;
+    }
+
+    private function coordKey(?string $street, ?string $suburb): string
+    {
+        return trim((string) $street) . '|' . trim((string) $suburb);
+    }
+
+    /**
+     * The district, which buildClientAddress writes into the address comment as
+     * "<city>, <suburb>" and Poster returns verbatim.
+     */
+    private function suburbOf($delivery): ?string
+    {
+        $parts = array_filter(array_map('trim', explode(',', (string) ($delivery->comment ?? ''))));
+
+        return $parts ? (string) end($parts) : null;
     }
 
     /**
@@ -277,17 +317,54 @@ class DeliveryMap extends Controller
         return $street !== '' ? $street : null;
     }
 
+    /**
+     * Best point available, in descending order of precision: what Poster stored,
+     * the geocoded building, then the street the address book knows.
+     */
     private function resolvePoint($delivery, array $coords): array
     {
         if (isset($delivery->lat, $delivery->lng) && $delivery->lat !== null && $delivery->lng !== null) {
-            return ['lat' => (float) $delivery->lat, 'lng' => (float) $delivery->lng];
+            return ['lat' => (float) $delivery->lat, 'lng' => (float) $delivery->lng, 'source' => 'building'];
         }
 
         $street = $this->streetOf($delivery);
+        $suburb = $this->suburbOf($delivery);
 
-        return $street !== null && isset($coords[$street])
-            ? $coords[$street]
-            : ['lat' => null, 'lng' => null];
+        if ($street === null) {
+            return ['lat' => null, 'lng' => null, 'source' => null];
+        }
+
+        // The street in its own district first — a bare street name can match the
+        // wrong one of several namesakes.
+        $specific = $this->coordKey($street, $suburb);
+        $known = ($suburb !== null && isset($coords[$specific]))
+            ? $coords[$specific]
+            : ($coords[$street] ?? ['lat' => null, 'lng' => null]);
+
+        // The street we know is both the fallback and the yardstick the geocoder
+        // uses to judge its candidates.
+        $building = $this->geocoder()->coordinatesFor($street, $this->houseOf($delivery), $known);
+
+        if ($building) {
+            return $building + ['source' => 'building'];
+        }
+
+        return $known + ['source' => $known['lat'] !== null ? 'street' : null];
+    }
+
+    /**
+     * The house number, which buildClientAddress appends after the street name.
+     */
+    private function houseOf($delivery): ?string
+    {
+        $parts = array_map('trim', explode(',', trim((string) ($delivery->address1 ?? ''))));
+
+        return isset($parts[1]) && $parts[1] !== '' ? $parts[1] : null;
+    }
+
+    private function geocoder(): GeocodeService
+    {
+        return $this->geocoder ?: ($this->geocoder = new GeocodeService());
     }
 
     /**

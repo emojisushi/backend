@@ -66,3 +66,11 @@
 .dm-order-courier.pending { background: #ececf0; color: #4a4a4f; }
 .dm-popup-pill.pending { background: #ececf0; color: #4a4a4f; }
 .dm-dot-pendingaccept { background: #8e8e93; }
+
+.dm-precise { color: #177a4c; font-weight: 800; }
+.dm-approx { color: #936200; font-weight: 800; }
+
+/* Browsers draw a focus ring on an SVG path once it is clicked, which shows up
+   as a black box over a delivery zone. The zones are not keyboard targets. */
+#dmMap path.leaflet-interactive:focus,
+#dmMap path.leaflet-interactive:focus-visible { outline: none; }
