@@ -183,3 +183,11 @@
 1.2.12:
     - 'Add couriers table'
     - add_couriers_table.php
+
+1.2.13:
+    - 'Add geocoded addresses cache'
+    - add_geocoded_addresses_table.php
+
+1.2.14:
+    - 'Record geocoding distance from the known street'
+    - add_distance_to_geocoded_addresses_table.php

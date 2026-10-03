@@ -219,15 +219,44 @@
                 '<span class="dm-popup-pill ' + (o.pending_accept ? 'pending' : (o.courier_id ? 'ok' : 'warn')) + '">' +
                 (o.pending_accept ? 'Не принят' : (o.courier_id ? 'Назначен' : 'Без курьера')) + '</span>' +
             '</div>' +
-            '<div class="dm-popup-address">' + escapeHtml(o.address || '—') + '</div>' +
+            '<div class="dm-popup-address">' + escapeHtml(fullAddress(o)) + '</div>' +
             '<div class="dm-popup-grid">' +
                 field('Доставить до', o.due || '—') +
                 field('Сумма', o.amount === null ? '—' : o.amount + ' &#8372;') +
                 field('Телефон', o.phone || '—') +
                 field('Курьер', o.courier || 'Не назначен') +
+                field('Точка на карте', precisionLabel(o)) +
                 (o.comment ? field('Комментарий', escapeHtml(o.comment), 'wide') : '') +
             '</div>' +
         '</div>';
+    }
+
+    /**
+     * Street and house, apartment details, then city and district — the district
+     * matters because several streets share a name across the city.
+     */
+    function fullAddress(o) {
+        var parts = [o.address, o.place].filter(function (p) {
+            return p && String(p).trim() !== '';
+        });
+
+        return parts.length ? parts.join(', ') : '—';
+    }
+
+    /**
+     * Whether the pin is the actual building or only the street it is on, so a
+     * courier knows how much to trust it.
+     */
+    function precisionLabel(o) {
+        if (o.location_source === 'building') {
+            return '<span class="dm-precise">Точный адрес</span>';
+        }
+
+        if (o.location_source === 'street') {
+            return '<span class="dm-approx">Примерно</span>';
+        }
+
+        return '<span class="dm-approx">Не определена</span>';
     }
 
     function field(label, value, modifier) {
