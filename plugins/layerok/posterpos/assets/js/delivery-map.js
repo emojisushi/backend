@@ -186,6 +186,31 @@
         $('#dmOrders').html(html);
     }
 
+    /**
+     * Up to two initials, so a pin says who is carrying it without being opened.
+     */
+    function initials(name) {
+        return String(name || '')
+            .split(/\s+/)
+            .filter(function (part) { return part.length; })
+            .slice(0, 2)
+            .map(function (part) { return part.charAt(0).toUpperCase(); })
+            .join('');
+    }
+
+    function pinIcon(o) {
+        var state = o.pending_accept ? 'pending' : (o.courier_id ? 'assigned' : 'unassigned');
+        var label = o.courier_id ? initials(o.courier) : '';
+
+        return L.divIcon({
+            className: 'dm-pin-wrap',
+            html: '<span class="dm-pin dm-pin-' + state + '">' + escapeHtml(label) + '</span>',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+            popupAnchor: [0, -14]
+        });
+    }
+
     function renderPins(list, fit) {
         pinLayer.clearLayers();
         markers = {};
@@ -195,13 +220,9 @@
         list.forEach(function (o) {
             if (o.pinLat === null || o.pinLng === null) { return; }
 
-            markers[o.key] = L.circleMarker([o.pinLat, o.pinLng], {
-                radius: 10,
-                color: '#fff',
-                weight: 3,
-                fillColor: o.pending_accept ? '#8e8e93' : (o.courier_id ? '#1fa766' : '#f6a700'),
-                fillOpacity: 1
-            }).bindPopup(popupHtml(o), { className: 'dm-popup-wrap', minWidth: 268 }).addTo(pinLayer);
+            markers[o.key] = L.marker([o.pinLat, o.pinLng], { icon: pinIcon(o) })
+                .bindPopup(popupHtml(o), { className: 'dm-popup-wrap', minWidth: 268 })
+                .addTo(pinLayer);
 
             bounds.push([o.pinLat, o.pinLng]);
         });
