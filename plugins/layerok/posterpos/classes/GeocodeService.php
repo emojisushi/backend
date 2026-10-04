@@ -147,6 +147,16 @@ class GeocodeService
     {
         $street = preg_replace('/\([^)]*\)/u', ' ', $street);
 
+        // Фонтанська дорога is split into stretches by tram stop in the address
+        // book ("Фонтанська дорога 1-9 станції"), but OSM holds it as one road.
+        // Deliberately narrow: a station reference is part of the real name
+        // elsewhere, as in "10-та лінія 6-ї станції Люстдорфської дороги".
+        $street = preg_replace(
+            '/^(Фонтанська\s+дорога)\s+\d+(?:\s*[-–—]\s*\d+)?\s*станц\w*$/ui',
+            '$1',
+            $street
+        );
+
         $abbreviations = [
             '/\bвул\.\s*/u' => 'вулиця ',
             '/\bпров\.\s*/u' => 'провулок ',

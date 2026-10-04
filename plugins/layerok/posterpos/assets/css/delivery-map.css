@@ -74,3 +74,17 @@
    as a black box over a delivery zone. The zones are not keyboard targets. */
 #dmMap path.leaflet-interactive:focus,
 #dmMap path.leaflet-interactive:focus-visible { outline: none; }
+
+/* map pins carry the courier's initials */
+.dm-pin-wrap { background: none; border: 0; }
+.dm-pin {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid #fff; box-sizing: border-box;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+    font-size: 12px; font-weight: 800; line-height: 1; color: #fff;
+    letter-spacing: .07em;
+}
+.dm-pin-assigned { background: #1fa766; }
+.dm-pin-unassigned { background: #f6a700; }
+.dm-pin-pending { background: #8e8e93; }
