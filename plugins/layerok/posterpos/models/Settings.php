@@ -16,5 +16,11 @@ class Settings extends Model
     // Reference to field configuration
     public $settingsFields = 'fields.yaml';
 
-
+    /**
+     * Categories whose presence in a cart adds the spot's extra wait time.
+     */
+    public static function extraWaitCategories(): array
+    {
+        return array_values(array_map('intval', (array) self::get('extra_wait_categories', [])));
+    }
 }

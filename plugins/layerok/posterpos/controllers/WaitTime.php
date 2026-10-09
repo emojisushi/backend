@@ -4,8 +4,9 @@ namespace Layerok\PosterPos\Controllers;
 
 use BackendMenu;
 use Backend\Classes\Controller;
+use Layerok\PosterPos\Models\Settings;
 use Layerok\PosterPos\Models\Spot;
-use Layerok\PosterPos\Models\SpotZone;
+use OFFLINE\Mall\Models\Category;
 
 class WaitTime extends Controller
 {
@@ -26,8 +27,13 @@ class WaitTime extends Controller
             'wait_minutes_spot',
             'wait_minutes_delivery',
             'default_wait_minutes_spot',
-            'default_wait_minutes_delivery'
+            'default_wait_minutes_delivery',
+            'extra_wait_enabled',
+            'extra_wait_minutes'
         )->get();
+
+        $this->vars['categories'] = Category::orderBy('name')->get(['id', 'name']);
+        $this->vars['extraCategories'] = Settings::extraWaitCategories();
     }
 
     public function save()
@@ -45,10 +51,17 @@ class WaitTime extends Controller
             $spot->wait_minutes_delivery = (int) ($data['wait_minutes_delivery'] ?? 0);
             $spot->default_wait_minutes_spot = (int) ($data['default_wait_minutes_spot'] ?? 0);
             $spot->default_wait_minutes_delivery = (int) ($data['default_wait_minutes_delivery'] ?? 0);
+            $spot->extra_wait_enabled = !empty($data['extra_wait_enabled']);
+            $spot->extra_wait_minutes = (int) ($data['extra_wait_minutes'] ?? 0);
             $spot->save();
         }
 
+        Settings::set('extra_wait_categories', array_values(array_filter(
+            array_map('intval', (array) input('extra_wait_categories', []))
+        )));
+
         \Flash::success('Дані збережено');
+
         return \Backend::redirect('layerok/posterpos/waittime');
     }
 }

@@ -191,3 +191,7 @@
 1.2.14:
     - 'Record geocoding distance from the known street'
     - add_distance_to_geocoded_addresses_table.php
+
+1.2.15:
+    - 'Add extra wait time per spot'
+    - add_extra_wait_to_spots_table.php

@@ -24,6 +24,7 @@ class OnlineOrder extends Model
         'delivery_price',
         'delivery_minutes',
         'client_address',
+        'delivery_at',
     ];
 
 }

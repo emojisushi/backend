@@ -46,8 +46,21 @@ class Spot extends Model
         'domain_name',
         'wait_minutes_spot',
         'wait_minutes_delivery',
+        'extra_wait_enabled',
+        'extra_wait_minutes',
     ];
     protected $hidden = ['merchant_account', 'merchant_secret_key'];
+
+    protected $appends = ['extra_wait_categories'];
+
+    /**
+     * Same list for every spot, but carried on the spot so a client can work out
+     * the wait from a single object instead of a second request.
+     */
+    public function getExtraWaitCategoriesAttribute(): array
+    {
+        return Settings::extraWaitCategories();
+    }
 
     public $slugs = [
         'slug' => 'name',
