@@ -4,7 +4,7 @@
     var REFRESH_MS = 30000;
 
     var map, zoneLayer, pinLayer, zonesVisible = true, timer = null;
-    var orders = [], activeKey = null, markers = {};
+    var orders = [], activeKey = null, markers = {}, loading = false;
 
     function initMap(el) {
         map = L.map(el).setView([46.4825, 30.7233], 12); // Odesa
@@ -53,11 +53,21 @@
     }
 
     function loadOrders(silent, fit) {
+        // A first load that geocodes new addresses can outrun the refresh
+        // interval. Overlapping requests duplicate that work and race each other
+        // writing the geocode cache, so only one is ever in flight.
+        if (loading) {
+            return;
+        }
+
+        loading = true;
+
         if (!silent) {
             $('#dmOrders').html('<div class="dm-empty">Загрузка…</div>');
         }
 
         $.request('onLoadOrders', {
+            complete: function () { loading = false; },
             data: { spot_id: $('#dmSpot').val(), date: $('#dmDate').val() },
             success: function (data) {
                 if (data.error) {

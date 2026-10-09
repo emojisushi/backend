@@ -262,9 +262,25 @@ class GeocodeService
 
         if ($cached) {
             $cached->fill($attributes)->save();
-            $row = $cached;
-        } else {
-            $row = GeocodedAddress::create($attributes + ['street' => $street, 'house' => $house]);
+
+            return $accepted ? $cached->point() : null;
+        }
+
+        $key = ['street' => $street, 'house' => $house];
+
+        try {
+            $row = GeocodedAddress::updateOrCreate($key, $attributes);
+        } catch (\Throwable $e) {
+            // Lookups take about a second each, so two overlapping requests can
+            // both miss the cache and both try to insert the same address. The
+            // loser of that race just updates the row the winner wrote.
+            $row = GeocodedAddress::where($key)->first();
+
+            if (!$row) {
+                throw $e;
+            }
+
+            $row->fill($attributes)->save();
         }
 
         return $accepted ? $row->point() : null;
