@@ -4,7 +4,7 @@
     var REFRESH_MS = 30000;
 
     var map, zoneLayer, pinLayer, zonesVisible = true, timer = null;
-    var orders = [], activeKey = null, markers = {};
+    var orders = [], activeKey = null, markers = {}, loading = false;
 
     function initMap(el) {
         map = L.map(el).setView([46.4825, 30.7233], 12); // Odesa
@@ -53,11 +53,21 @@
     }
 
     function loadOrders(silent, fit) {
+        // A first load that geocodes new addresses can outrun the refresh
+        // interval. Overlapping requests duplicate that work and race each other
+        // writing the geocode cache, so only one is ever in flight.
+        if (loading) {
+            return;
+        }
+
+        loading = true;
+
         if (!silent) {
             $('#dmOrders').html('<div class="dm-empty">Загрузка…</div>');
         }
 
         $.request('onLoadOrders', {
+            complete: function () { loading = false; },
             data: { spot_id: $('#dmSpot').val(), date: $('#dmDate').val() },
             success: function (data) {
                 if (data.error) {
@@ -111,7 +121,6 @@
             if (filter === 'unassigned') { return !o.courier_id; }
             return String(o.courier_id) === String(filter);
         }).sort(function (a, b) {
-            // Not accepted first — those need attention before anything else.
             return (a.pending_accept ? 0 : 1) - (b.pending_accept ? 0 : 1) ||
                 (a.courier_id ? 1 : 0) - (b.courier_id ? 1 : 0) ||
                 String(a.due).localeCompare(String(b.due));
@@ -186,9 +195,6 @@
         $('#dmOrders').html(html);
     }
 
-    /**
-     * Up to two initials, so a pin says who is carrying it without being opened.
-     */
     function initials(name) {
         return String(name || '')
             .split(/\s+/)
@@ -252,10 +258,6 @@
         '</div>';
     }
 
-    /**
-     * Street and house, apartment details, then city and district — the district
-     * matters because several streets share a name across the city.
-     */
     function fullAddress(o) {
         var parts = [o.address, o.place].filter(function (p) {
             return p && String(p).trim() !== '';
@@ -364,7 +366,6 @@
 
             map.setView([order.pinLat, order.pinLng], 16);
 
-            // Show the same card the pin shows, so the list and the map agree.
             if (markers[activeKey]) {
                 markers[activeKey].openPopup();
             }

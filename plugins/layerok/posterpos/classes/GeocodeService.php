@@ -92,8 +92,6 @@ class GeocodeService
 
     private function lookUp(string $street, string $house, array $reference, ?GeocodedAddress $cached): ?array
     {
-        // Every unknown address is looked up, and the throttle means a second
-        // each. Only the first load pays it, since results are cached.
         set_time_limit(0);
 
         try {
@@ -102,8 +100,6 @@ class GeocodeService
             $response = $this->client()->get(self::ENDPOINT, [
                 'query' => [
                     'street' => $house . ' ' . $this->normaliseStreet($street),
-                    // A box around this street rather than one covering both
-                    // cities, so a namesake elsewhere is never even a candidate.
                     'viewbox' => $this->viewboxAround($reference),
                     'bounded' => config('geocode.bounded') ? 1 : 0,
                     'countrycodes' => config('geocode.country_codes'),
@@ -236,7 +232,6 @@ class GeocodeService
             return true;
         }
 
-        // jsonv2 reports this separately, and it is the most reliable signal.
         $addressType = (string) ($candidate['addresstype'] ?? '');
 
         return in_array($addressType, ['building', 'house', 'residential'], true)
@@ -252,7 +247,6 @@ class GeocodeService
         $attributes = [
             'lat' => $accepted ? (float) $candidate['lat'] : null,
             'lng' => $accepted ? (float) $candidate['lon'] : null,
-            // Kept even when rejected, to see what it wanted to match.
             'display_name' => $candidate ? mb_substr((string) ($candidate['display_name'] ?? ''), 0, 500) : null,
             'result_class' => $candidate ? (string) ($candidate['class'] ?? $candidate['category'] ?? '') : null,
             'distance_m' => $distance,
@@ -262,9 +256,25 @@ class GeocodeService
 
         if ($cached) {
             $cached->fill($attributes)->save();
-            $row = $cached;
-        } else {
-            $row = GeocodedAddress::create($attributes + ['street' => $street, 'house' => $house]);
+
+            return $accepted ? $cached->point() : null;
+        }
+
+        $key = ['street' => $street, 'house' => $house];
+
+        try {
+            $row = GeocodedAddress::updateOrCreate($key, $attributes);
+        } catch (\Throwable $e) {
+            // Lookups take about a second each, so two overlapping requests can
+            // both miss the cache and both try to insert the same address. The
+            // loser of that race just updates the row the winner wrote.
+            $row = GeocodedAddress::where($key)->first();
+
+            if (!$row) {
+                throw $e;
+            }
+
+            $row->fill($attributes)->save();
         }
 
         return $accepted ? $row->point() : null;

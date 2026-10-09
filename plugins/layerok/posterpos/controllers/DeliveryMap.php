@@ -47,7 +47,6 @@ class DeliveryMap extends Controller
         $this->addJs($this->asset('js/delivery-map.js'), ['defer' => true]);
         $this->addCss($this->asset('css/delivery-map.css'));
 
-        // Unpublished spots are not serving customers, so they are not worth filtering by.
         $this->vars['spots'] = Spot::where('published', true)->orderBy('name')->get();
         $this->vars['today'] = date('Y-m-d');
         $this->vars['showPendingAccept'] = self::SHOW_PENDING_ACCEPT;
@@ -173,7 +172,6 @@ class DeliveryMap extends Controller
     {
         $line = (string) ($order->address ?? '');
         $street = $this->streetFromLine($line);
-        // No delivery record on an unaccepted order, so only the street is known.
         $point = $street !== null && isset($coords[$street])
             ? $coords[$street] + ['source' => 'street']
             : ['lat' => null, 'lng' => null, 'source' => null];
@@ -341,8 +339,6 @@ class DeliveryMap extends Controller
             ? $coords[$specific]
             : ($coords[$street] ?? ['lat' => null, 'lng' => null]);
 
-        // The street we know is both the fallback and the yardstick the geocoder
-        // uses to judge its candidates.
         $building = $this->geocoder()->coordinatesFor($street, $this->houseOf($delivery), $known);
 
         if ($building) {

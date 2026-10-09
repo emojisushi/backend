@@ -13,6 +13,7 @@ use Layerok\PosterPos\Classes\OnlineOrderStatus;
 use Layerok\PosterPos\Classes\ServiceMode;
 use Layerok\PosterPos\Classes\ShippingMethodCode;
 use Layerok\PosterPos\Models\Spot;
+use Layerok\PosterPos\Models\Settings as PosterSettings;
 use Layerok\PosterPos\Models\User;
 use Layerok\Restapi\Services\BonusService;
 use October\Rain\Exception\ValidationException;
@@ -246,6 +247,12 @@ class OrderControllerV2 extends Controller
         if ($clientAddress) {
             $incomingOrder['client_address'] = $clientAddress;
         }
+
+        $delivery_time += $this->extraWaitMinutes($spot, $products);
+
+        $deliveryAt = $this->resolveDeliveryTime($user, $data, $delivery_time);
+        $incomingOrder['delivery_time'] = $deliveryAt->format('Y-m-d H:i:s');
+        $data['delivery_at'] = $deliveryAt;
 
         $data['spot_minutes'] = $delivery_time;
         $courier_fee = null;
@@ -639,7 +646,8 @@ class OrderControllerV2 extends Controller
             'email' => 'email|nullable',
             'shipping_method_id' => 'exists:offline_mall_shipping_methods,id',
             'payment_method_id' => 'exists:offline_mall_payment_methods,id',
-            'spot_id' => 'exists:layerok_posterpos_spots,id'
+            'spot_id' => 'exists:layerok_posterpos_spots,id',
+            'delivery_time' => 'nullable|date'
         ];
 
         if (isset($data['shipping_method_id'])) {
@@ -829,9 +837,58 @@ class OrderControllerV2 extends Controller
         return Config::get('layerok.restapi::order.sushi_sticks_poster_id');
     }
 
+    /**
+     * Minutes to add because the order contains something slow to make.
+     *
+     * Which categories count is configured on the wait time page, and each spot
+     * decides whether it applies and by how much.
+     */
+    private function extraWaitMinutes(?Spot $spot, $products): int
+    {
+        if (!$spot || !$spot->extra_wait_enabled) {
+            return 0;
+        }
+
+        $categories = PosterSettings::extraWaitCategories();
+
+        if (!$categories) {
+            return 0;
+        }
+
+        $matches = collect($products)->contains(
+            fn($product) => $product->categories->pluck('id')->intersect($categories)->isNotEmpty()
+        );
+
+        return $matches ? max(0, (int) $spot->extra_wait_minutes) : 0;
+    }
+
     public function getTrainingSticksPosterId()
     {
         return Config::get('layerok.restapi::order.training_sticks_poster_id');
+    }
+
+    private function resolveDeliveryTime($user, array $data, $waitMinutes): \DateTimeInterface
+    {
+        // Poster reads this as account-local time. The server runs UTC, so a naive
+        // timestamp lands hours in the past and is rejected as dateNotInTheFuture.
+        $zone = new \DateTimeZone(Config::get('layerok.restapi::order.timezone'));
+        $now = new \DateTime('now', $zone);
+        $requested = trim((string) ($data['delivery_time'] ?? ''));
+
+        if ($requested !== '' && $user && $user->isCallCenterAdmin()) {
+            try {
+                $chosen = new \DateTime($requested, $zone);
+
+                if ($chosen > $now) {
+                    return $chosen;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        $due = (clone $now)->modify('+' . max(0, (int) $waitMinutes) . ' minutes');
+
+        return $due > $now ? $due : (clone $now)->modify('+1 minute');
     }
 
     /**
@@ -977,6 +1034,7 @@ class OrderControllerV2 extends Controller
             'real_spot_id'      => $real_spot_id,
             'delivery_price'    => $data['delivery_price'],
             'delivery_minutes'  => $data['delivery_minutes'],
+            'delivery_at'       => $data['delivery_at'] ?? null,
             'client_address'    => isset($data['client_address']) ? json_encode($data['client_address']) : null
         ];
 

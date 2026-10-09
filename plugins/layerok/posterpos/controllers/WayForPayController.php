@@ -344,6 +344,12 @@ class WayForPayController
             $incomingOrder['client_address'] = $clientAddress;
         }
 
+        // The time promised at checkout, not one recomputed now — payment may have
+        // taken a while, and a call centre operator may have set it deliberately.
+        if (!empty($order->delivery_at)) {
+            $incomingOrder['delivery_time'] = date('Y-m-d H:i:s', strtotime((string) $order->delivery_at));
+        }
+
 
         $posterResult = (object) PosterApi::incomingOrders()
             ->createIncomingOrder($incomingOrder);
