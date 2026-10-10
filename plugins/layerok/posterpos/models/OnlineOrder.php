@@ -25,6 +25,7 @@ class OnlineOrder extends Model
         'delivery_minutes',
         'client_address',
         'delivery_at',
+        'callcenter_delivery_at',
     ];
 
 }

@@ -346,8 +346,23 @@ class WayForPayController
 
         // The time promised at checkout, not one recomputed now — payment may have
         // taken a while, and a call centre operator may have set it deliberately.
-        if (!empty($order->delivery_at)) {
-            $incomingOrder['delivery_time'] = date('Y-m-d H:i:s', strtotime((string) $order->delivery_at));
+        $promisedAt = $order->callcenter_delivery_at ?: $order->delivery_at;
+
+        if (!empty($promisedAt)) {
+            // The column holds account-local time while the server runs UTC, so the
+            // comparison has to name the zone or Poster rejects it as
+            // dateNotInTheFuture — and by now the promised time may well have passed.
+            $zone = new \DateTimeZone(\Config::get('layerok.restapi::order.timezone'));
+            $now = new \DateTime('now', $zone);
+
+            try {
+                $promised = new \DateTime((string) $promisedAt, $zone);
+            } catch (\Throwable $e) {
+                $promised = $now;
+            }
+
+            $incomingOrder['delivery_time'] = ($promised > $now ? $promised : (clone $now)->modify('+1 minute'))
+                ->format('Y-m-d H:i:s');
         }
 
 

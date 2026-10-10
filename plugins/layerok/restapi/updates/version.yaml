@@ -67,3 +67,7 @@
 1.0.30:
     - 'Store the due delivery time on online orders'
     - add_delivery_at_to_online_orders_table.php
+
+1.0.31:
+    - 'Keep the call centre delivery time apart from the computed one'
+    - add_callcenter_delivery_at_to_online_orders_table.php
