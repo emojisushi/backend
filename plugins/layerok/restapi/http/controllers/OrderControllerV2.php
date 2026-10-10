@@ -241,7 +241,6 @@ class OrderControllerV2 extends Controller
             'last_name' => $data['lastname'] ?? null,
             'service_mode' => $mode,
             'address' => $address,
-            'delivery_minutes' => $delivery_time ?? null
         ];
 
         if ($clientAddress) {
@@ -250,10 +249,13 @@ class OrderControllerV2 extends Controller
 
         $delivery_time += $this->extraWaitMinutes($spot, $products);
 
-        $deliveryAt = $this->resolveDeliveryTime($user, $data, $delivery_time);
+        $overriddenTime = false;
+        $deliveryAt = $this->resolveDeliveryTime($user, $data, $delivery_time, $overriddenTime);
         $incomingOrder['delivery_time'] = $deliveryAt->format('Y-m-d H:i:s');
-        $data['delivery_at'] = $deliveryAt;
+        $incomingOrder['delivery_minutes'] = $overriddenTime ? null : $delivery_time;
 
+        $data['delivery_at'] = $deliveryAt;
+        $data['callcenter_delivery_at'] = $overriddenTime ? $deliveryAt : null;
         $data['spot_minutes'] = $delivery_time;
         $courier_fee = null;
         if ($shippingMethod->code === ShippingMethodCode::COURIER && $isAddressSystem) {
@@ -362,7 +364,7 @@ class OrderControllerV2 extends Controller
                 }
             }
 
-            $order = $this->createOnlineOrder($incomingOrder, $total, $cart, $spot->id);
+            $order = $this->createOnlineOrder($incomingOrder, $total, $cart, $spot->id, $deliveryAt, $overriddenTime);
             $order_id = $order->id;
             $wayforpay_id = $order_id . '-' . time();
             $order->online_payment_id = $wayforpay_id;
@@ -723,6 +725,10 @@ class OrderControllerV2 extends Controller
         $trainingSticksAmount = $noCutlery ? null : ($data['training_sticks'] ?? null);
         $cutleryMessage = $noCutlery ? trans('layerok.restapi::lang.receipt.no_cutlery') : null;
 
+        // Only set when an operator picked the time. It supersedes the estimate, so
+        // the minutes are left out whenever there is one.
+        $deliveryAt = self::formatDeliveryAt($data['callcenter_delivery_at'] ?? null);
+
         $receipt
             ->headline(htmlspecialchars($headline))
             ->field(
@@ -778,12 +784,16 @@ class OrderControllerV2 extends Controller
                 htmlspecialchars($data['delivery_price_uah'] ?? null)
             )
             ->field(
+                trans('layerok.restapi::lang.receipt.callcenter_delivery_at'),
+                htmlspecialchars($deliveryAt ?? '')
+            )
+            ->field(
                 trans('layerok.restapi::lang.receipt.delivery_minutes'),
-                htmlspecialchars(self::formatMinutes($data['delivery_minutes'] ?? null))
+                htmlspecialchars($deliveryAt ? '' : (self::formatMinutes($data['delivery_minutes'] ?? null) ?? ''))
             )
             ->field(
                 trans('layerok.restapi::lang.receipt.spot_minutes'),
-                htmlspecialchars(self::formatMinutes($data['spot_minutes'] ?? null))
+                htmlspecialchars($deliveryAt ? '' : (self::formatMinutes($data['spot_minutes'] ?? null) ?? ''))
             )
             ->newLine()
             ->b(trans('layerok.restapi::lang.receipt.order_items'))
@@ -808,6 +818,22 @@ class OrderControllerV2 extends Controller
 
         return $receipt->getText();
     }
+    /**
+     * No timezone conversion on purpose: both the DateTime built at checkout and
+     * the stored column already hold the account-local time that was promised.
+     */
+    public static function formatDeliveryAt($value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('d.m.Y H:i');
+        }
+
+        $value = trim((string) $value);
+        $time = $value === '' ? false : strtotime($value);
+
+        return $time === false ? null : date('d.m.Y H:i', $time);
+    }
+
     public static function formatMinutes($minutes)
     {
 
@@ -867,8 +893,10 @@ class OrderControllerV2 extends Controller
         return Config::get('layerok.restapi::order.training_sticks_poster_id');
     }
 
-    private function resolveDeliveryTime($user, array $data, $waitMinutes): \DateTimeInterface
+    private function resolveDeliveryTime($user, array $data, $waitMinutes, ?bool &$overridden = null): \DateTimeInterface
     {
+        $overridden = false;
+
         // Poster reads this as account-local time. The server runs UTC, so a naive
         // timestamp lands hours in the past and is rejected as dateNotInTheFuture.
         $zone = new \DateTimeZone(Config::get('layerok.restapi::order.timezone'));
@@ -880,6 +908,8 @@ class OrderControllerV2 extends Controller
                 $chosen = new \DateTime($requested, $zone);
 
                 if ($chosen > $now) {
+                    $overridden = true;
+
                     return $chosen;
                 }
             } catch (\Throwable $e) {
@@ -1015,7 +1045,7 @@ class OrderControllerV2 extends Controller
 
         return $c;
     }
-    private function createOnlineOrder($data, $total, $cart, $real_spot_id)
+    private function createOnlineOrder($data, $total, $cart, $real_spot_id, $deliveryAt = null, $chosenByOperator = false)
     {
         $order = [
             'status'            => OnlineOrderStatus::WAITING,
@@ -1034,7 +1064,10 @@ class OrderControllerV2 extends Controller
             'real_spot_id'      => $real_spot_id,
             'delivery_price'    => $data['delivery_price'],
             'delivery_minutes'  => $data['delivery_minutes'],
-            'delivery_at'       => $data['delivery_at'] ?? null,
+            // Passed in rather than read off $data: the Poster payload is $data here,
+            // and neither time is one of its parameters.
+            'delivery_at'       => $deliveryAt,
+            'callcenter_delivery_at' => $chosenByOperator ? $deliveryAt : null,
             'client_address'    => isset($data['client_address']) ? json_encode($data['client_address']) : null
         ];
 
