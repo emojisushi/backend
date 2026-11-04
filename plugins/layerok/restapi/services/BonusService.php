@@ -327,6 +327,70 @@ class BonusService
     }
 
     /**
+     * Grants the points Poster withholds from a bill our register plugin discounted.
+     *
+     * Poster still calculates the accrual for such a bill (bonus_accrual on each
+     * line) but never credits it once a loyalty app has set the bonus line, so the
+     * client would earn nothing on an order partly paid with points. A bill closed
+     * without that line accrues in Poster as usual and is left alone.
+     *
+     * $transaction is dash.getTransaction with include_history and include_products.
+     * One accrual per receipt, so a retried webhook cannot credit twice.
+     */
+    public function accrueWithheld(BonusTransaction $spend, $transaction): ?BonusTransaction
+    {
+        $transaction = json_decode(json_encode($transaction), true) ?: [];
+        $transactionId = (int) ($transaction['transaction_id'] ?? 0);
+
+        if (!$transactionId || !$spend->poster_client_id) {
+            return null;
+        }
+
+        $close = collect($transaction['history'] ?? [])->last(
+            fn($entry) => ($entry['type_history'] ?? null) === 'close'
+        );
+
+        if (empty($close['value_text']['loyalty_app_id'])) {
+            return null;
+        }
+
+        $amount = (int) collect($transaction['products'] ?? [])->sum(
+            fn($product) => (int) ($product['bonus_accrual'] ?? 0)
+        );
+
+        if ($amount <= 0) {
+            return null;
+        }
+
+        $alreadyAccrued = BonusTransaction::where('transaction_id', $transactionId)
+            ->where('status', BonusTransaction::STATUS_EXTERNAL)
+            ->exists();
+
+        if ($alreadyAccrued) {
+            return null;
+        }
+
+        $balance = $this->changeBonus($spend->poster_client_id, $amount);
+
+        return BonusTransaction::create([
+            'user_id' => $spend->user_id,
+            'poster_client_id' => $spend->poster_client_id,
+            'online_order_id' => $spend->online_order_id,
+            'incoming_order_id' => $spend->incoming_order_id,
+            'transaction_id' => $transactionId,
+            'amount' => $amount,
+            'delta' => $amount,
+            'balance_after' => $balance,
+            'status' => BonusTransaction::STATUS_EXTERNAL,
+            'note' => 'Accrual for app order'
+                . ($spend->online_order_id ? ' (online order #' . $spend->online_order_id . ')' : '')
+                . ': incoming order #' . $spend->incoming_order_id
+                . ', receipt #' . $transactionId
+                . ' — Poster skipped it because points were spent',
+        ]);
+    }
+
+    /**
      * Records a balance change Poster made on its own — points spent at the till,
      * an accrual when a bill closes, or a manual edit in the Poster dashboard.
      *
@@ -428,9 +492,9 @@ class BonusService
     }
 
     /**
-     * Poster reports balances in minor units but takes writes in whole currency
-     * units, so the kopeck amount the ledger holds is converted here. Spending is
-     * capped to whole hryvnia (see maxSpendable), so the division is always exact.
+     * Poster reports balances in minor units but takes writes in currency units,
+     * fractions included (checked: +0.55 lands as 55 kopecks), so the kopeck
+     * amount the ledger holds is converted here without rounding.
      *
      * Returns the resulting balance converted back to minor units.
      */
@@ -439,7 +503,7 @@ class BonusService
         $response = $this->call(
             fn() => PosterApi::clients()->changeClientBonus([
                 'client_id' => $clientId,
-                'count' => intdiv($countInMinorUnits, 100),
+                'count' => number_format($countInMinorUnits / 100, 2, '.', ''),
                 // We already record our own writes in the ledger; letting them come
                 // back through the client webhook would count them twice.
                 'block_webhook' => 'true',
@@ -447,7 +511,8 @@ class BonusService
             'clients.changeClientBonus'
         );
 
-        return is_numeric($response) ? (int) $response * 100 : null;
+        // Poster answers with the balance in currency units, e.g. 96.35.
+        return is_numeric($response) ? (int) round($response * 100) : null;
     }
 
     private function call(callable $request, string $label)
