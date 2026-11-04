@@ -179,7 +179,8 @@ class PosterWebhookController
     }
 
     /**
-     * Чек закрыт — списание становится окончательным. Удалённый чек возвращает бонусы.
+     * Чек закрыт — списание становится окончательным, и начисляем бонусы, которые
+     * Poster не начислил из-за оплаты бонусами. Удалённый чек возвращает бонусы.
      */
     private function handleTransaction(int $transactionId, string $action = '', $rawData = null): void
     {
@@ -211,6 +212,9 @@ class PosterWebhookController
         PosterApi::init(config('poster'));
         $result = (object) PosterApi::dash()->getTransaction([
             'transaction_id' => $transactionId,
+            // Needed to grant the accrual Poster withholds — see accrueWithheld().
+            'include_history' => 'true',
+            'include_products' => 'true',
         ]);
 
         $transaction = collect($result->response ?? [])->first();
@@ -229,7 +233,12 @@ class PosterWebhookController
         }
 
         if ($status === 2) {
-            (new BonusService())->settle($row);
+            $bonus = new BonusService();
+
+            // Accrue before settling: if Poster fails here the webhook is retried,
+            // and the retry only finds the row while it is still applied.
+            $bonus->accrueWithheld($row, $transaction);
+            $bonus->settle($row);
         }
     }
 
