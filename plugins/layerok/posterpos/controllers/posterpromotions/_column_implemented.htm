@@ -1,0 +1,19 @@
+<?php $reason = $record->unsupportedReason(); ?>
+<?php if ($reason === null): ?>
+    <?php
+    $rule = $record->rule();
+    $category = $record->category_name ?: ('категории Poster #' . (int) $rule->categoryPosterId);
+    $gift = $record->giftName() ?: ('товар Poster #' . (int) $rule->giftPosterId);
+    ?>
+    <span class="text-success">Да</span>
+    <div class="text-muted" style="font-size: 12px;">
+        <?= (int) $rule->requiredCount ?> шт. из «<?= e($category) ?>»
+        → <?= (int) $rule->giftCount ?> × «<?= e($gift) ?>» в подарок<?= $rule->accumulate ? ' (за каждые ' . (int) $rule->requiredCount . ')' : ', один раз на заказ' ?>
+    </div>
+    <?php if (!$record->giftName()): ?>
+        <div class="text-warning" style="font-size: 12px;">Нет данных о подарке — нажмите «Импортировать из Poster»</div>
+    <?php endif ?>
+<?php else: ?>
+    <span class="text-muted">Нет</span>
+    <div class="text-muted" style="font-size: 12px;"><?= e($reason) ?></div>
+<?php endif ?>

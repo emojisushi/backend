@@ -1,0 +1,21 @@
+fields:
+    name:
+        label: Название (из Poster)
+        disabled: true
+        span: left
+    poster_promotion_id:
+        label: Poster ID
+        disabled: true
+        span: right
+    _window_section:
+        type: section
+        label: Время действия
+        comment: 'Когда бэкенд применяет акцию к онлайн-заказам, время по Киеву. Пусто — весь день (расписание самой акции в Poster учитывается всегда). Например 11:00 — 22:00 действует до 21:59. Можно через полночь: 22:00 — 02:00.'
+    active_from:
+        label: Действует с (ЧЧ:ММ)
+        placeholder: '11:00'
+        span: left
+    active_to:
+        label: Действует до (ЧЧ:ММ)
+        placeholder: '22:00'
+        span: right

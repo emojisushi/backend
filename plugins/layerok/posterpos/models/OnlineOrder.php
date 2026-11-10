@@ -27,6 +27,7 @@ class OnlineOrder extends Model
         'delivery_at',
         'callcenter_delivery_at',
         'real_spot_id',
+        'promotion',
     ];
 
 }

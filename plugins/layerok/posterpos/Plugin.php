@@ -233,8 +233,7 @@ class Plugin extends PluginBase
                 $config['fields']['hide_categories_in_spot'] = [
                     'label' => 'Скрыть категорию в заведении',
                     'type' => 'relation',
-                ];
-            }
+                ];            }
 
             if ($path === '/plugins/offline/mall/controllers/categories/config_relation.yaml') {
                 $config['poster_accounts'] = $this->posterAccountsRelationConfig();
@@ -544,6 +543,10 @@ class Plugin extends PluginBase
                 'tab' => 'PosterPos',
                 'label' => 'Диагностика',
             ],
+            'layerok.posterpos.poster_promotions' => [
+                'tab' => 'PosterPos',
+                'label' => 'Акции Poster (импорт и включение)',
+            ],
         ];
     }
 
@@ -594,6 +597,12 @@ class Plugin extends PluginBase
                         'label' => "Promotions",
                         'icon'   => 'icon-bullhorn',
                         'url'    => Backend::url('layerok/posterpos/promotion'),
+                    ],
+                    'posterpos-poster-promotions' => [
+                        'label' => 'Poster Promotions',
+                        'icon'   => 'icon-gift',
+                        'url'    => Backend::url('layerok/posterpos/posterpromotions'),
+                        'permissions' => ['layerok.posterpos.poster_promotions'],
                     ],
                     'posterpos-banners' => [
                         'label' => "Banners",

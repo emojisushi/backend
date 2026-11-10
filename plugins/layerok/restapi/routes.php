@@ -52,6 +52,7 @@ Route::group([
     Route::get('payments', [PaymentMethodController::class, 'all']);
     Route::get('banners', [BannerController::class, 'all']);
     Route::get('promotions', [PromotionController::class, 'all']);
+    Route::get('poster-promotions', [PromotionController::class, 'posterActive']);
     Route::get('ingredients', [IngredientController::class, 'all']);
     Route::prefix('order')->group(function () {
         Route::post('place', [OrderController::class, 'place']);

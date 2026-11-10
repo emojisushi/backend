@@ -1,0 +1,38 @@
+columns:
+    poster_promotion_id:
+        label: Poster ID
+        searchable: true
+    name:
+        label: Название
+        searchable: true
+    poster_account:
+        label: Аккаунт
+        relation: poster_account
+        select: account_name
+    period_label:
+        label: Период
+        sortable: false
+    window_label:
+        label: Время действия
+        sortable: false
+    spots_label:
+        label: Заведения
+        sortable: false
+    status:
+        label: Статус
+        type: partial
+        path: $/layerok/posterpos/controllers/posterpromotions/_column_status.htm
+        sortable: false
+    implemented:
+        label: Реализована в бэкенде
+        type: partial
+        path: $/layerok/posterpos/controllers/posterpromotions/_column_implemented.htm
+        sortable: false
+    enabled:
+        label: Применять к онлайн-заказам
+        type: partial
+        path: $/layerok/posterpos/controllers/posterpromotions/_column_enabled.htm
+        clickable: false
+    imported_at:
+        label: Импортировано
+        type: datetime

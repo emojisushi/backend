@@ -410,6 +410,15 @@ class WayForPayController
             $incomingOrder['client_address'] = $clientAddress;
         }
 
+        // The gifts worked out at checkout. Not recomputed now: the client was
+        // promised them, even if the promotion was switched off during payment.
+        $appliedPromotions = json_decode((string) $order->promotion, true);
+        $appliedPromotions = is_array($appliedPromotions) ? $appliedPromotions : [];
+
+        if ($appliedPromotions) {
+            $incomingOrder['promotion'] = array_column($appliedPromotions, 'poster');
+        }
+
         // The time promised at checkout, not one recomputed now — payment may have
         // taken a while, and a call centre operator may have set it deliberately.
         $promisedAt = $order->callcenter_delivery_at ?: $order->delivery_at;
@@ -452,7 +461,8 @@ class WayForPayController
                     PaymentMethod::where('code', 'wayforpay')->first(),
                     $order,
                     null,
-                    (int) ($bonusRow->amount ?? 0)
+                    (int) ($bonusRow->amount ?? 0),
+                    $appliedPromotions
                 ),
                 'parse_mode' => "html",
                 'chat_id' => $spot->chat->internal_id
