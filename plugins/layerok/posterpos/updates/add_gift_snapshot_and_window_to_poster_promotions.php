@@ -19,13 +19,19 @@ class AddGiftSnapshotAndWindowToPosterPromotions extends Migration
             // timezone; both empty means no limit beyond Poster's own periods.
             $table->string('active_from', 5)->nullable();
             $table->string('active_to', 5)->nullable();
+            // ISO week days it applies on (1 = Monday); empty means every day.
+            $table->string('active_days')->nullable();
+            // Poster product ids in the promotion's Poster category, which is what
+            // counts towards it — not our own categories, which a product can have
+            // several of. Set on import, kept current by the dish webhook.
+            $table->mediumText('qualifying')->nullable();
         });
     }
 
     public function down()
     {
         Schema::table('layerok_posterpos_poster_promotions', function (Blueprint $table) {
-            $table->dropColumn(['gift', 'category_name', 'active_from', 'active_to']);
+            $table->dropColumn(['gift', 'category_name', 'active_from', 'active_to', 'active_days', 'qualifying']);
         });
     }
 }

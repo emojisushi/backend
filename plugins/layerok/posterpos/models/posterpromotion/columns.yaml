@@ -13,7 +13,7 @@ columns:
         label: Период
         sortable: false
     window_label:
-        label: Время действия
+        label: Когда действует
         sortable: false
     spots_label:
         label: Заведения

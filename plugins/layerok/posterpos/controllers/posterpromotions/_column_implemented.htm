@@ -10,6 +10,14 @@
         <?= (int) $rule->requiredCount ?> шт. из «<?= e($category) ?>»
         → <?= (int) $rule->giftCount ?> × «<?= e($gift) ?>» в подарок<?= $rule->accumulate ? ' (за каждые ' . (int) $rule->requiredCount . ')' : ', один раз на заказ' ?>
     </div>
+    <?php if ($record->hasQualifyingProducts()): ?>
+        <div class="text-muted" style="font-size: 12px;">
+            Считаются товары с категорией «<?= e($category) ?>» в Poster: <?= count($record->qualifyingPosterProductIds()) ?> шт.
+            Свои категории на сайте не учитываются.
+        </div>
+    <?php else: ?>
+        <div class="text-warning" style="font-size: 12px;">Список товаров акции не загружен — нажмите «Импортировать из Poster»</div>
+    <?php endif ?>
     <?php if (!$record->giftName()): ?>
         <div class="text-warning" style="font-size: 12px;">Нет данных о подарке — нажмите «Импортировать из Poster»</div>
     <?php endif ?>

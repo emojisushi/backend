@@ -975,14 +975,39 @@ class OrderControllerV2 extends Controller
         $name = $promotion ? $promotion->name : '';
 
         throw new ValidationException([
-            'promotion_unavailable' => $promotion && $promotion->hasWindow()
+            'promotion_unavailable' => $promotion && $promotion->hasSchedule()
                 ? trans('layerok.restapi::validation.promotion_window', [
                     'name' => $name,
-                    'from' => $promotion->active_from,
-                    'to' => $promotion->active_to,
+                    'schedule' => self::formatPromotionSchedule($promotion),
                 ])
                 : trans('layerok.restapi::validation.promotion_unavailable', ['name' => $name]),
         ]);
+    }
+
+    /**
+     * "у пн, ср, пт з 11:00 до 22:00", "з 11:00 до 22:00", "у сб, нд" — in the
+     * client's language.
+     */
+    private static function formatPromotionSchedule(PosterPromotion $promotion): string
+    {
+        $parts = [];
+        $days = $promotion->activeDays();
+
+        if ($days) {
+            $names = trans('layerok.restapi::lang.promotion.weekdays');
+            $parts[] = trans('layerok.restapi::lang.promotion.on_days', [
+                'days' => implode(', ', array_map(fn($day) => $names[$day] ?? $day, $days)),
+            ]);
+        }
+
+        if ($promotion->hasWindow()) {
+            $parts[] = trans('layerok.restapi::lang.promotion.from_to', [
+                'from' => $promotion->active_from,
+                'to' => $promotion->active_to,
+            ]);
+        }
+
+        return implode(' ', $parts);
     }
 
     public static function formatMinutes($minutes)

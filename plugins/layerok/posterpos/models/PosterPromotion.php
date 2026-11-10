@@ -46,7 +46,12 @@ class PosterPromotion extends Model
         'category_name',
         'active_from',
         'active_to',
+        'active_days',
+        'qualifying',
     ];
+
+    // ISO week days, for labels and the admin form
+    public const DAYS = [1 => 'Пн', 2 => 'Вт', 3 => 'Ср', 4 => 'Чт', 5 => 'Пт', 6 => 'Сб', 7 => 'Вс'];
 
     public $rules = [
         'active_from' => ['nullable', 'regex:' . PromotionWindow::TIME_PATTERN, 'required_with:active_to'],
@@ -61,7 +66,9 @@ class PosterPromotion extends Model
     ];
 
     // gift: Poster snapshot of the gift product, see PosterPromotionImporter::snapshot()
-    protected $jsonable = ['params', 'gift'];
+    // qualifying: {category_id, product_ids} in Poster ids, see PosterPromotionImporter
+    // active_days: ISO week days the promotion applies on, [] for every day
+    protected $jsonable = ['params', 'gift', 'qualifying', 'active_days'];
 
     protected $casts = [
         'auto_apply' => 'boolean',
@@ -96,18 +103,18 @@ class PosterPromotion extends Model
     }
 
     /**
-     * Poster's own schedule (dates, week days, periods) and our time window.
+     * Poster's own schedule (dates, week days, periods) and ours (days and time).
      */
     public function isRunningAt(\DateTimeInterface $now): bool
     {
-        return PromotionWindow::isOpen($this->active_from, $this->active_to, $now)
+        return PromotionWindow::isOpen($this->active_from, $this->active_to, $now, $this->activeDays())
             && $this->isScheduledInPosterAt($now);
     }
 
     /**
-     * Poster's schedule alone, without our time window. The apps get promotions
-     * on this basis and apply the window themselves, so a gift shows up and goes
-     * away on time without reloading.
+     * Poster's schedule alone, without our days and time. The apps get promotions
+     * on this basis and apply ours themselves, so a gift shows up and goes away on
+     * time without reloading.
      */
     public function isScheduledInPosterAt(\DateTimeInterface $now): bool
     {
@@ -127,9 +134,38 @@ class PosterPromotion extends Model
         return PromotionWindow::hasWindow($this->active_from, $this->active_to);
     }
 
+    /**
+     * ISO week days it applies on, [] for every day.
+     */
+    public function activeDays(): array
+    {
+        return PromotionWindow::normalizeDays($this->active_days);
+    }
+
+    /**
+     * Whether any of our own limits (days or time) is set.
+     */
+    public function hasSchedule(): bool
+    {
+        return $this->hasWindow() || (bool) $this->activeDays();
+    }
+
+    /**
+     * "Пн, Ср, Пт 11:00 — 22:00", "каждый день 11:00 — 22:00", "Сб, Вс весь день".
+     */
     public function getWindowLabelAttribute(): string
     {
-        return $this->hasWindow() ? $this->active_from . ' — ' . $this->active_to : 'весь день';
+        $days = $this->activeDays();
+        $dayLabel = $days
+            ? implode(', ', array_map(fn($day) => self::DAYS[$day], $days))
+            : 'каждый день';
+
+        return $dayLabel . ' ' . ($this->hasWindow() ? $this->active_from . ' — ' . $this->active_to : 'весь день');
+    }
+
+    public function getActiveDaysOptions(): array
+    {
+        return self::DAYS;
     }
 
     public function beforeSave()
@@ -138,6 +174,8 @@ class PosterPromotion extends Model
             $value = trim((string) $this->{$field});
             $this->{$field} = $value === '' ? null : $value;
         }
+
+        $this->active_days = $this->activeDays();
     }
 
     /**
@@ -171,6 +209,22 @@ class PosterPromotion extends Model
         return Spot::whereIn('poster_id', $ids)
             ->whereHas('tablet', fn($query) => $query->where('poster_account_id', $this->poster_account_id))
             ->get();
+    }
+
+    /**
+     * Poster product ids that count towards the promotion: the products whose
+     * Poster category is the promotion's category. Poster gives a product exactly
+     * one category, so a combo in «Комбо Набори» never counts as a pizza here,
+     * whatever categories it has on our side.
+     */
+    public function qualifyingPosterProductIds(): array
+    {
+        return array_values(array_map('intval', (array) (((array) $this->qualifying)['product_ids'] ?? [])));
+    }
+
+    public function hasQualifyingProducts(): bool
+    {
+        return isset(((array) $this->qualifying)['product_ids']);
     }
 
     public function giftName(): ?string

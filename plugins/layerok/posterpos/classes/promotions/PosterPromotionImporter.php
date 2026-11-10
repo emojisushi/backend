@@ -84,9 +84,128 @@ class PosterPromotionImporter
                 $model->save();
                 $result['removed']++;
             }
+
+            try {
+                $this->refreshQualifying($account);
+            } catch (\Throwable $e) {
+                $result['errors'][] = $account->account_name . ' (товары акций): ' . $e->getMessage();
+            }
         }
 
         return $result;
+    }
+
+    /**
+     * Works out, from the whole Poster menu, which products count towards each
+     * supported promotion of the account: those whose Poster category is the
+     * promotion's category. Only that exact category — a subcategory would pull
+     * in e.g. «Комбо Набори», which is under «Роли» on prod.
+     */
+    public function refreshQualifying(PosterAccount $account): void
+    {
+        $promotions = $this->implementedPromotions($account);
+
+        if ($promotions->isEmpty()) {
+            return;
+        }
+
+        $this->init($account);
+        $response = (object) PosterApi::makeApiRequest('menu.getProducts', 'get');
+
+        if (isset($response->error) || !isset($response->response) || !is_array($response->response)) {
+            throw new \RuntimeException((string) ($response->message ?? 'Poster returned no products'));
+        }
+
+        $byCategory = [];
+
+        foreach ($response->response as $product) {
+            $byCategory[(int) ($product->menu_category_id ?? 0)][] = (int) $product->product_id;
+        }
+
+        foreach ($promotions as $promotion) {
+            $categoryId = $promotion->rule()->categoryPosterId;
+            $productIds = $byCategory[$categoryId] ?? [];
+            sort($productIds);
+
+            $promotion->qualifying = ['category_id' => $categoryId, 'product_ids' => $productIds];
+            $promotion->save();
+        }
+    }
+
+    /**
+     * A dish or product was added, changed or removed in Poster (webhook). Adds it
+     * to or drops it from the promotions it counts towards, according to its Poster
+     * category now. One request for the product, and none at all when the account
+     * has no supported promotions.
+     */
+    public function applyProductChange(string $accountName, string $action, int $posterProductId): void
+    {
+        // The webhook names the Poster account. Our record may be named otherwise
+        // (locally "demo" for emojisushi), so fall back to the account the webhook
+        // settings belong to, as the rest of the webhook does.
+        $account = PosterAccount::where('account_name', $accountName)->first()
+            ?? PosterAccount::where('access_token', config('poster.access_token'))->first();
+
+        if (!$account || $posterProductId < 1) {
+            return;
+        }
+
+        $promotions = $this->implementedPromotions($account)
+            ->filter(fn(PosterPromotion $promotion) => $promotion->hasQualifyingProducts());
+
+        if ($promotions->isEmpty()) {
+            return;
+        }
+
+        $categoryId = null;
+
+        if ($action !== 'removed') {
+            $this->init($account);
+            $product = ((object) PosterApi::makeApiRequest('menu.getProduct', 'get', ['product_id' => $posterProductId]))->response ?? null;
+
+            if (!$product) {
+                // Not found means gone; anything else is not worth guessing about.
+                return;
+            }
+
+            $categoryId = (int) ($product->menu_category_id ?? 0);
+        }
+
+        foreach ($promotions as $promotion) {
+            $ids = $promotion->qualifyingPosterProductIds();
+            sort($ids);
+            $counts = $categoryId !== null && $categoryId === $promotion->rule()->categoryPosterId;
+            $next = $counts
+                ? array_values(array_unique(array_merge($ids, [$posterProductId])))
+                : array_values(array_diff($ids, [$posterProductId]));
+            sort($next);
+
+            if ($next !== $ids) {
+                $qualifying = (array) $promotion->qualifying;
+                $qualifying['product_ids'] = $next;
+                $promotion->qualifying = $qualifying;
+                $promotion->save();
+            }
+        }
+    }
+
+    private function implementedPromotions(PosterAccount $account)
+    {
+        return PosterPromotion::where('poster_account_id', $account->id)
+            ->where('removed_in_poster', false)
+            ->get()
+            ->filter(fn(PosterPromotion $promotion) => $promotion->isImplemented())
+            ->values();
+    }
+
+    private function init(PosterAccount $account): void
+    {
+        PosterApi::init([
+            'account_name' => $account->account_name,
+            'application_id' => $account->application_id,
+            'application_secrete' => $account->application_secret,
+            'access_token' => $account->access_token,
+        ]);
     }
 
     /**
@@ -132,12 +251,7 @@ class PosterPromotionImporter
 
     private function fetch(PosterAccount $account): array
     {
-        PosterApi::init([
-            'account_name' => $account->account_name,
-            'application_id' => $account->application_id,
-            'application_secrete' => $account->application_secret,
-            'access_token' => $account->access_token,
-        ]);
+        $this->init($account);
 
         $response = (object) PosterApi::makeApiRequest('clients.getPromotions', 'get');
 
