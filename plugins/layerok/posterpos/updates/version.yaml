@@ -223,3 +223,11 @@
 1.2.22:
     - 'Add limited per-spot stock and the reservations orders take from it'
     - create_spot_stock_tables.php
+
+1.2.23:
+    - 'Add Poster promotions imported from clients.getPromotions'
+    - create_poster_promotions_table.php
+
+1.2.24:
+    - 'Keep a Poster snapshot of promotion gifts and add a time window to promotions'
+    - add_gift_snapshot_and_window_to_poster_promotions.php

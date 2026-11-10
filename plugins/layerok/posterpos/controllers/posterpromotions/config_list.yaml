@@ -1,0 +1,32 @@
+# ===================================
+#  List Behavior Config
+# ===================================
+
+list: $/layerok/posterpos/models/posterpromotion/columns.yaml
+
+modelClass: Layerok\PosterPos\Models\PosterPromotion
+
+title: Акции Poster
+
+recordUrl: layerok/posterpos/posterpromotions/update/:id
+
+noRecordsMessage: 'Акций нет — нажмите «Импортировать из Poster»'
+
+recordsPerPage: 50
+
+showPageNumbers: true
+
+showSetup: false
+
+showSorting: true
+
+defaultSort:
+    column: poster_promotion_id
+    direction: desc
+
+showCheckboxes: false
+
+toolbar:
+    buttons: list_toolbar
+    search:
+        prompt: backend::lang.list.search_prompt

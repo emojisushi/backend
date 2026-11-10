@@ -1,0 +1,24 @@
+<?php $implemented = $record->isImplemented(); ?>
+<?php if ($record->enabled): ?>
+    <button
+        type="button"
+        class="btn btn-sm btn-success"
+        data-request="onToggle"
+        data-request-data="id: <?= (int) $record->id ?>"
+        data-request-confirm="Выключить акцию «<?= e($record->name) ?>»?"
+        data-stripe-load-indicator>
+        Включена — выключить
+    </button>
+<?php elseif ($implemented): ?>
+    <button
+        type="button"
+        class="btn btn-sm btn-default"
+        data-request="onToggle"
+        data-request-data="id: <?= (int) $record->id ?>"
+        data-request-confirm="Включить акцию «<?= e($record->name) ?>»? Она начнёт применяться к онлайн-заказам."
+        data-stripe-load-indicator>
+        Включить
+    </button>
+<?php else: ?>
+    <span class="text-muted">Недоступно</span>
+<?php endif ?>

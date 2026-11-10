@@ -1,0 +1,16 @@
+# ===================================
+#  Form Behavior Config
+# ===================================
+
+name: Акция Poster
+
+form: $/layerok/posterpos/models/posterpromotion/fields.yaml
+
+modelClass: Layerok\PosterPos\Models\PosterPromotion
+
+defaultRedirect: layerok/posterpos/posterpromotions
+
+update:
+    title: Акция Poster
+    redirect: layerok/posterpos/posterpromotions
+    redirectClose: layerok/posterpos/posterpromotions

@@ -75,3 +75,7 @@
 1.0.32:
     - 'Widen the online order comment and record our spot id'
     - widen_online_orders_comment_and_add_real_spot_id.php
+
+1.0.33:
+    - 'Keep the Poster promotion payload of prepaid online orders'
+    - add_promotion_to_online_orders_table.php

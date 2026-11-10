@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Validator;
 use Layerok\Basecode\Classes\Receipt;
 use Layerok\PosterPos\Classes\OnlineOrderStatus;
+use Layerok\PosterPos\Classes\Promotions\PosterPromotionService;
 use Layerok\PosterPos\Classes\ServiceMode;
 use Layerok\PosterPos\Classes\ShippingMethodCode;
 use Layerok\PosterPos\Classes\SpotStockService;
@@ -23,6 +24,7 @@ use OFFLINE\Mall\Models\Currency;
 use OFFLINE\Mall\Models\PaymentMethod;
 use Layerok\PosterPos\Models\ShippingMethod;
 use Layerok\PosterPos\Models\PosterAccount;
+use Layerok\PosterPos\Models\PosterPromotion;
 use OFFLINE\Mall\Models\Product;
 use poster\src\PosterApi;
 use Telegram\Bot\Api;
@@ -152,6 +154,13 @@ class OrderControllerV2 extends Controller
             ];
         });
 
+        // The paid cart lines, before sticks are added, for the Poster promotions.
+        $promotionLines = $products->map(fn(Product $product, $key) => [
+            'product' => $product,
+            'quantity' => (int) $posterProducts[$key]['count'],
+            'poster_id' => (int) $posterProducts[$key]['product_id'],
+        ])->values()->all();
+
         // no_cutlery suppresses sticks/training_sticks entirely — no cutlery-related
         // poster line items, and their info is overwritten in the comment/receipt below
         $noCutlery = !empty($data['no_cutlery']);
@@ -248,6 +257,20 @@ class OrderControllerV2 extends Controller
             $incomingOrder['client_address'] = $clientAddress;
         }
 
+        // Gifts are free, so they stay out of $total and do not count towards the
+        // area minimum, the bonus limit or the WayForPay charge.
+        $appliedPromotions = $this->applyPosterPromotions($poster_account, $spot, $promotionLines);
+
+        if ($appliedPromotions === null) {
+            $appliedPromotions = [];
+        } else {
+            $this->assertExpectedPromotions($data['expected_promotions'] ?? [], $appliedPromotions);
+        }
+
+        if ($appliedPromotions) {
+            $incomingOrder['promotion'] = array_column($appliedPromotions, 'poster');
+        }
+
         $delivery_time += $this->extraWaitMinutes($spot, $products);
 
         $overriddenTime = false;
@@ -264,6 +287,9 @@ class OrderControllerV2 extends Controller
                 ? 'layerok.restapi::lang.receipt.deliver_at'
                 : 'layerok.restapi::lang.receipt.ready_at'
             ) . ': ' . self::formatDeliveryAt($deliveryAt),
+            // So the gift is seen on the order even where Poster does not show
+            // the promotion. Before the bonus marker, which must stay last.
+            self::formatGifts($appliedPromotions),
         ])->filter()->join(' || ');
 
         $data['delivery_at'] = $deliveryAt;
@@ -369,6 +395,7 @@ class OrderControllerV2 extends Controller
 
             $incomingOrderTest = $incomingOrder;
             $incomingOrderTest['products'] = null;
+            unset($incomingOrderTest['promotion']);
             $posterTest = (object) PosterApi::incomingOrders()
                 ->createIncomingOrder($incomingOrderTest);
             if (isset($posterTest->error)) {
@@ -392,7 +419,7 @@ class OrderControllerV2 extends Controller
             $reservations = $stock->reserveOrFail($spot->id, $stock->quantitiesFromCart($cart));
 
             try {
-                $order = $this->createOnlineOrder($incomingOrder, $total, $cart, $spot->id, $deliveryAt, $overriddenTime);
+                $order = $this->createOnlineOrder($incomingOrder, $total, $cart, $spot->id, $deliveryAt, $overriddenTime, $appliedPromotions);
             } catch (\Throwable $e) {
                 $stock->release($reservations);
 
@@ -601,7 +628,8 @@ class OrderControllerV2 extends Controller
                         $paymentMethod,
                         $data,
                         $spot,
-                        $usedBonus
+                        $usedBonus,
+                        $appliedPromotions
                     ),
                     'parse_mode' => "html",
                     'chat_id' => $spot->chat->internal_id
@@ -662,7 +690,8 @@ class OrderControllerV2 extends Controller
                     $paymentMethod,
                     $data,
                     $spot,
-                    $usedBonus
+                    $usedBonus,
+                    $appliedPromotions
                 ),
                 'parse_mode' => "html",
                 'chat_id' => $spot->chat->internal_id
@@ -728,7 +757,8 @@ class OrderControllerV2 extends Controller
         PaymentMethod $paymentMethod,
         $data,
         ?Spot $spot = null,
-        int $usedBonus = 0
+        int $usedBonus = 0,
+        array $appliedPromotions = []
     ): string {
         $money = app()->make(Money::class);
         $receipt = new Receipt();
@@ -844,7 +874,23 @@ class OrderControllerV2 extends Controller
                     htmlspecialchars($item['name']),
                     htmlspecialchars($item['count'])
                 )->newLine();
-            })
+            });
+
+        if ($appliedPromotions) {
+            $receipt
+                ->newLine()
+                ->b(trans('layerok.restapi::lang.receipt.gifts'))
+                ->colon()
+                ->newLine()
+                ->map($appliedPromotions, function ($applied) {
+                    $this->product(
+                        htmlspecialchars($applied['gift_name'] . ' (' . $applied['name'] . ')'),
+                        htmlspecialchars((string) $applied['gift_count'])
+                    )->newLine();
+                });
+        }
+
+        $receipt
             ->newLine()
             ->field(
                 trans('layerok.restapi::lang.receipt.bonuses_used'),
@@ -872,6 +918,71 @@ class OrderControllerV2 extends Controller
         $time = $value === '' ? false : strtotime($value);
 
         return $time === false ? null : date('d.m.Y H:i', $time);
+    }
+
+    /**
+     * "Подарунки за акцією: Піца Спешл × 1" for the Poster comment, null without gifts.
+     */
+    public static function formatGifts(array $appliedPromotions): ?string
+    {
+        if (!$appliedPromotions) {
+            return null;
+        }
+
+        return trans('layerok.restapi::lang.receipt.gifts') . ': ' . collect($appliedPromotions)
+            ->map(fn($applied) => $applied['gift_name'] . ' × ' . $applied['gift_count'])
+            ->join(', ');
+    }
+
+    /**
+     * Never lets a promotion problem stop the order: without it the client simply
+     * gets no gift, which the operator can still add on the register. Null when
+     * the promotions could not be worked out at all.
+     */
+    private function applyPosterPromotions(PosterAccount $account, Spot $spot, array $lines): ?array
+    {
+        try {
+            return (new PosterPromotionService())->applyToOrder($account, $spot, $lines);
+        } catch (\Throwable $e) {
+            \Log::error('Poster promotions were not applied: ' . $e->getMessage());
+
+            return null;
+        }
+    }
+
+    /**
+     * The client sends the promotions whose gifts it showed. When one of them does
+     * not apply any more — most often its time window closed while the client was
+     * at checkout — the order is refused rather than quietly placed without the
+     * gift. The client then reloads the promotions and the gift disappears.
+     *
+     * Checked once, at placement: a WayForPay order keeps its gift when the payment
+     * arrives after the window has closed.
+     */
+    private function assertExpectedPromotions($expected, array $applied): void
+    {
+        $expected = collect(is_array($expected) ? $expected : [])
+            ->map(fn($id) => (int) $id)
+            ->filter()
+            ->unique();
+        $missing = $expected->diff(array_column($applied, 'promotion_id'));
+
+        if ($missing->isEmpty()) {
+            return;
+        }
+
+        $promotion = PosterPromotion::find($missing->first());
+        $name = $promotion ? $promotion->name : '';
+
+        throw new ValidationException([
+            'promotion_unavailable' => $promotion && $promotion->hasWindow()
+                ? trans('layerok.restapi::validation.promotion_window', [
+                    'name' => $name,
+                    'from' => $promotion->active_from,
+                    'to' => $promotion->active_to,
+                ])
+                : trans('layerok.restapi::validation.promotion_unavailable', ['name' => $name]),
+        ]);
     }
 
     public static function formatMinutes($minutes)
@@ -1085,7 +1196,7 @@ class OrderControllerV2 extends Controller
 
         return $c;
     }
-    private function createOnlineOrder($data, $total, $cart, $real_spot_id, $deliveryAt = null, $chosenByOperator = false)
+    private function createOnlineOrder($data, $total, $cart, $real_spot_id, $deliveryAt = null, $chosenByOperator = false, array $appliedPromotions = [])
     {
         $order = [
             'status'            => OnlineOrderStatus::WAITING,
@@ -1108,8 +1219,15 @@ class OrderControllerV2 extends Controller
             // and neither time is one of its parameters.
             'delivery_at'       => $deliveryAt,
             'callcenter_delivery_at' => $chosenByOperator ? $deliveryAt : null,
-            'client_address'    => isset($data['client_address']) ? json_encode($data['client_address']) : null
+            'client_address'    => isset($data['client_address']) ? json_encode($data['client_address']) : null,
         ];
+
+        // With the gift names, so the receipt sent after payment can list them.
+        // Only set when there are gifts, so orders keep working on a database where
+        // the column has not been added yet.
+        if ($appliedPromotions) {
+            $order['promotion'] = json_encode($appliedPromotions);
+        }
 
         // Create and return the order
         return OnlineOrder::create($order);

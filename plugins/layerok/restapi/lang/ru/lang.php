@@ -18,6 +18,7 @@ return [
         'products' => 'Товары',
         'total'   => 'Итого',
         'bonuses_used' => 'Оплачено бонусами',
+        'gifts' => 'Подарки по акции',
         'delivery_method_name'   => 'Доставка',
         'change'   => 'Приготовить сдачу с',
         'payment_method_name'   => 'Оплата',

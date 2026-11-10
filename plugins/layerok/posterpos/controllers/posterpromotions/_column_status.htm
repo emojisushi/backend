@@ -1,0 +1,15 @@
+<?php
+$now = (new \Layerok\PosterPos\Classes\Promotions\PosterPromotionService())->now();
+$nowAt = $now->format('Y-m-d H:i:s');
+?>
+<?php if ($record->removed_in_poster): ?>
+    <span class="text-danger">Удалена в Poster</span>
+<?php elseif ($record->date_end && (string) $record->date_end < $nowAt): ?>
+    <span class="text-muted">Закончилась</span>
+<?php elseif ($record->date_start && (string) $record->date_start > $nowAt): ?>
+    <span class="text-info">Ещё не началась</span>
+<?php elseif ($record->isRunningAt($now)): ?>
+    <span class="text-success">Идёт</span>
+<?php else: ?>
+    <span class="text-muted">Не сейчас (дни / часы)</span>
+<?php endif ?>
