@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\Config;
 use Layerok\PosterPos\Models\PosterAccount;
 use Layerok\PosterPos\Models\PosterPromotion;
 use Layerok\PosterPos\Models\Spot;
-use OFFLINE\Mall\Models\Category;
 use OFFLINE\Mall\Models\Product;
 
 /**
@@ -39,7 +38,7 @@ class PosterPromotionService
     /**
      * Promotions the order qualifies for.
      *
-     * @param array $lines [['product' => Product (with categories), 'quantity' => int, 'poster_id' => int], ...]
+     * @param array $lines [['product' => Product, 'quantity' => int, 'poster_id' => int], ...]
      * @return array[] each ['poster' => <Poster `promotion` entry>, 'name' => string, 'gift_name' => string, 'gift_count' => int]
      */
     public function applyToOrder(PosterAccount $account, Spot $spot, array $lines): array
@@ -53,9 +52,11 @@ class PosterPromotionService
                 continue;
             }
 
-            $categoryIds = $this->localCategoryIds($account, $rule->categoryPosterId);
+            // By the product's Poster category, as Poster itself counts it — our own
+            // categories are ignored, a combo may well be under «Піца» here.
+            $qualifyingIds = array_flip($promotion->qualifyingPosterProductIds());
 
-            if (!$categoryIds) {
+            if (!$qualifyingIds) {
                 continue;
             }
 
@@ -63,8 +64,6 @@ class PosterPromotionService
             $qualifying = 0;
 
             foreach ($lines as $line) {
-                /** @var Product $product */
-                $product = $line['product'];
                 $posterId = (int) ($line['poster_id'] ?? 0);
                 $quantity = (int) ($line['quantity'] ?? 0);
 
@@ -72,9 +71,7 @@ class PosterPromotionService
                     continue;
                 }
 
-                $inCategory = $product->categories->pluck('id')->intersect($categoryIds)->isNotEmpty();
-
-                if (!$inCategory) {
+                if (!isset($qualifyingIds[$posterId])) {
                     continue;
                 }
 
@@ -107,21 +104,21 @@ class PosterPromotionService
     }
 
     /**
-     * Our categories that stand for this Poster category: the one synced from it
-     * and everything under it.
+     * Our product ids for these Poster product ids of the account, for the apps.
      */
-    public function localCategoryIds(PosterAccount $account, int $posterCategoryId): array
+    public function localProductIds(PosterAccount $account, array $posterProductIds): array
     {
-        $category = Category::whereHas('poster_accounts', fn($query) => $query->where([
-            ['poster_id', $posterCategoryId],
-            ['poster_account_id', $account->id],
-        ]))->first();
-
-        if (!$category) {
+        if (!$posterProductIds) {
             return [];
         }
 
-        return $category->getAllChildrenAndSelf()->pluck('id')->map(fn($id) => (int) $id)->all();
+        return Product::whereHas('poster_accounts', fn($query) => $query
+            ->where('poster_account_id', $account->id)
+            ->whereIn('poster_id', $posterProductIds))
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     public function localProduct(PosterAccount $account, int $posterProductId): ?Product

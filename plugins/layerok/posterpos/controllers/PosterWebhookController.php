@@ -5,6 +5,7 @@ namespace Layerok\PosterPos\Controllers;
 use Illuminate\Support\Facades\Log;
 use Layerok\PosterPos\Classes\Delivery\DeliveryEventRecorder;
 use Layerok\PosterPos\Classes\PosterTransition;
+use Layerok\PosterPos\Classes\Promotions\PosterPromotionImporter;
 use Layerok\PosterPos\Classes\SpotStockService;
 use Layerok\RestApi\Models\BonusTransaction;
 use Layerok\Restapi\Services\BonusService;
@@ -112,6 +113,26 @@ class PosterWebhookController
             }
         } catch (\Throwable $e) {
             Log::error('Dish webhook failed', [
+                'object_id' => $postData['object_id'],
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Which products count towards the Poster promotions follows their Poster
+        // category, so a dish or product moved in or out of «Піца» is picked up
+        // here. Separate from the sync above: a product that failed to sync still
+        // has to be counted correctly.
+        try {
+            if ($postData['object'] === 'dish' || $postData['object'] === 'product') {
+                (new PosterPromotionImporter())->applyProductChange(
+                    (string) $postData['account'],
+                    (string) ($postData['action'] ?? ''),
+                    (int) $postData['object_id']
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('Promotion products webhook failed', [
+                'object' => $postData['object'],
                 'object_id' => $postData['object_id'],
                 'error' => $e->getMessage(),
             ]);

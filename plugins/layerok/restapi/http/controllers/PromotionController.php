@@ -9,7 +9,6 @@ use Layerok\PosterPos\Classes\Promotions\PosterPromotionService;
 use Layerok\PosterPos\Models\PosterPromotion;
 use Layerok\PosterPos\Models\Promotion;
 use OFFLINE\Mall\Classes\Utils\Money;
-use OFFLINE\Mall\Models\Category;
 use OFFLINE\Mall\Models\Currency;
 use poster\src\PosterApi;
 
@@ -53,9 +52,11 @@ class PromotionController extends Controller
             ->map(function (PosterPromotion $promotion) use ($service) {
                 $rule = $promotion->rule();
                 $account = $promotion->poster_account;
-                $categoryIds = $service->localCategoryIds($account, $rule->categoryPosterId);
+                // Our ids of the products whose Poster category counts, so the apps
+                // count exactly what the order will.
+                $productIds = $service->localProductIds($account, $promotion->qualifyingPosterProductIds());
 
-                if (!$categoryIds) {
+                if (!$productIds) {
                     return null;
                 }
 
@@ -68,15 +69,16 @@ class PromotionController extends Controller
                 return [
                     'id' => $promotion->id,
                     'name' => $promotion->name,
-                    'category_ids' => $categoryIds,
-                    'category_name' => $promotion->category_name
-                        ?: optional(Category::find($categoryIds[0]))->name,
+                    'product_ids' => $productIds,
+                    'category_name' => $promotion->category_name,
                     'required_count' => $rule->requiredCount,
                     'gift_count' => $rule->giftCount,
                     'accumulate' => $rule->accumulate,
                     // Kyiv time; null when the promotion runs all day
                     'active_from' => $promotion->hasWindow() ? $promotion->active_from : null,
                     'active_to' => $promotion->hasWindow() ? $promotion->active_to : null,
+                    // ISO week days (1 = Monday) in Kyiv; [] for every day
+                    'active_days' => $promotion->activeDays(),
                     'spot_ids' => $promotion->spots()->pluck('id')->map(fn($id) => (int) $id)->values(),
                     'gift' => $gift,
                 ];
