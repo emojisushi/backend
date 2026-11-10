@@ -231,3 +231,7 @@
 1.2.24:
     - 'Keep a Poster snapshot of promotion gifts and add a time window to promotions'
     - add_gift_snapshot_and_window_to_poster_promotions.php
+
+1.2.25:
+    - 'Add the Poster promotion columns 1.2.24 gained after it had already run'
+    - complete_poster_promotions_columns.php
