@@ -7,8 +7,11 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Layerok\PosterPos\Models\Banner;
+use Layerok\PosterPos\Models\City;
 use Layerok\PosterPos\Models\Wishlist;
+use Layerok\Restapi\Classes\CatalogCache;
 use Layerok\Restapi\Services\AppService;
+use RainLab\Translate\Classes\Translator;
 use OFFLINE\Mall\Classes\CategoryFilter\SortOrder\SortOrder;
 use OFFLINE\Mall\Classes\Index\MySQL\IndexEntry;
 use OFFLINE\Mall\Models\Category;
@@ -18,13 +21,45 @@ class CatalogController extends Controller
 {
     public function index(): JsonResponse
     {
+        // todo: inject it via container
+        $appService = new AppService();
+        // Categories honour ?city_slug and fall back to the Referer subdomain;
+        // products have always used the Referer only.
+        $citySlug = input('city_slug');
+        $categoriesCity = $citySlug
+            ? $appService->getCurrentCity($citySlug)
+            : $appService->getCurrentCity();
+        $productsCity = $appService->getCurrentCity();
+        $withMobile = !(request()->has('mobile') && !request()->boolean('mobile'));
+
+        // The menu is the same for every visitor of a city, so it is cached
+        // (see CatalogCache); wishlists belong to the visitor and stay live.
+        // Cities are keyed by id, never by the raw slug or Referer, so random
+        // input cannot multiply the cache entries.
+        $vary = [
+            'locale' => Translator::instance()->getLocale(),
+            'host' => request()->getHost(),
+        ];
+
         return response()->json([
-            'categories' => $this->getCategories(),
+            'categories' => CatalogCache::remember(
+                'categories',
+                $vary + ['city' => $categoriesCity?->id],
+                fn () => $this->getCategories($categoriesCity)->toArray()
+            ),
             'wishlists' => $this->getWishlists(),
-            'banners' => $this->getBanners(),
-            'products' => $this->getProducts(),
+            'banners' => CatalogCache::remember(
+                'banners',
+                $vary,
+                fn () => $this->getBanners()
+            ),
+            'products' => CatalogCache::remember(
+                'products',
+                $vary + ['city' => $productsCity?->id, 'mobile' => $withMobile],
+                fn () => $this->getProducts($productsCity, $withMobile)->toArray()
+            ),
             'sort_options' => collect(SortOrder::options(true))->keys(),
-        ]);
+        ])->header('X-Catalog-Cache', CatalogCache::header());
     }
 
     public function getBanners(): array
@@ -53,18 +88,10 @@ class CatalogController extends Controller
         ] : [];
     }
 
-    public function getCategories(): Collection
+    public function getCategories(?City $city): Collection
     {
         $query = Category::query()->with(['image']);
         $query->where('published', '=', '1');
-        // todo: inject it via container
-        $city = input('city_slug');
-        $appService = new AppService();
-        if (!$city) {
-            $city = $appService->getCurrentCity();
-        } else {
-            $city = $appService->getCurrentCity($city);
-        }
 
         if ($city) {
             $query->whereDoesntHave('hidden_categories_in_city', function ($query) use ($city) {
@@ -75,7 +102,7 @@ class CatalogController extends Controller
         return $query->get();
     }
 
-    public function getProducts(): Collection
+    public function getProducts(?City $city, bool $withMobile): Collection
     {
         $sortOrder = SortOrder::fromKey('latest');
 
@@ -88,10 +115,8 @@ class CatalogController extends Controller
             ->where('published', true)
             ->orderBy($sortOrder->property(), $sortOrder->direction());
 
-        // todo: inject it via container
-        $appService = new AppService();
         $hiddenCategoryIds = [];
-        if ($city = $appService->getCurrentCity()) {
+        if ($city) {
             $hiddenCategoryIds = $city->hidden_categories()
                 ->pluck('category_id')
                 ->toArray();
@@ -126,7 +151,7 @@ class CatalogController extends Controller
         $mobileFlags = Product::whereIn('id', $itemIds)
             ->pluck('mobile', 'id'); // [$id => bool]
 
-        if (request()->has('mobile') && !request()->boolean('mobile')) {
+        if (!$withMobile) {
             $itemIds = array_values(array_filter($itemIds, fn($id) => !$mobileFlags[$id]));
         }
         usort($itemIds, fn($a, $b) => $mobileFlags[$b] <=> $mobileFlags[$a]);

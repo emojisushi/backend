@@ -46,9 +46,11 @@ class BonusTransaction extends Model
         'balance_after',
         'status',
         'note',
+        'promotion_order',
     ];
 
     protected $casts = [
+        'promotion_order' => 'boolean',
         'amount' => 'integer',
         'delta' => 'integer',
         'balance_after' => 'integer',

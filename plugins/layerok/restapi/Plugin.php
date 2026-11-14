@@ -2,6 +2,7 @@
 
 namespace Layerok\RestApi;
 
+use Layerok\Restapi\Classes\CatalogCache;
 use Layerok\Restapi\Classes\Sort\Category;
 use Layerok\RestApi\Classes\Customer\DefaultSignUpHandler;
 use OFFLINE\Mall\Classes\CategoryFilter\SortOrder\Bestseller;
@@ -35,6 +36,8 @@ class Plugin extends PluginBase
 
     public function boot()
     {
+        $this->flushCatalogCacheOnMenuChanges();
+
         User::extend(function ($model) {
             $model->addFillable(['bonuses']);
 
@@ -104,5 +107,33 @@ class Plugin extends PluginBase
                 'keywords' => 'contact',
             ]
         ];
+    }
+
+    /**
+     * /api/catalog is cached for a short while (CatalogCache). Saving or
+     * deleting anything it is built from makes it stale, so edits in the
+     * backend and Poster syncs show up on the next request instead of after
+     * the TTL.
+     */
+    private function flushCatalogCacheOnMenuChanges(): void
+    {
+        $models = [
+            \OFFLINE\Mall\Models\Product::class,
+            \OFFLINE\Mall\Models\Variant::class,
+            \OFFLINE\Mall\Models\Category::class,
+            \OFFLINE\Mall\Models\ProductPrice::class,
+            \OFFLINE\Mall\Models\Price::class,
+            \OFFLINE\Mall\Models\ImageSet::class,
+            \OFFLINE\Mall\Models\Property::class,
+            \OFFLINE\Mall\Models\PropertyValue::class,
+            \Layerok\PosterPos\Models\Banner::class,
+            \Layerok\PosterPos\Models\City::class,
+            \Layerok\PosterPos\Models\Spot::class,
+        ];
+
+        foreach ($models as $model) {
+            $model::saved(fn () => CatalogCache::flush());
+            $model::deleted(fn () => CatalogCache::flush());
+        }
     }
 }

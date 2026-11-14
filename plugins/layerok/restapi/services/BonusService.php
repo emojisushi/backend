@@ -184,7 +184,8 @@ class BonusService
         int $amount,
         ?int $onlineOrderId = null,
         ?int $incomingOrderId = null,
-        ?int $clientId = null
+        ?int $clientId = null,
+        bool $promotionOrder = false
     ): BonusTransaction {
         return BonusTransaction::create([
             'user_id' => $user->id,
@@ -193,6 +194,8 @@ class BonusService
             'incoming_order_id' => $incomingOrderId,
             'amount' => $amount,
             'status' => BonusTransaction::STATUS_PENDING,
+            // no points are earned on an order with a Poster promotion
+            'promotion_order' => $promotionOrder,
         ]);
     }
 
@@ -243,9 +246,9 @@ class BonusService
     /**
      * Reserve and write off in one step, for orders that are real on placement.
      */
-    public function apply(User $user, int $amount, int $incomingOrderId, ?int $clientId = null): BonusTransaction
+    public function apply(User $user, int $amount, int $incomingOrderId, ?int $clientId = null, bool $promotionOrder = false): BonusTransaction
     {
-        $row = $this->reserve($user, $amount, null, $incomingOrderId, $clientId);
+        $row = $this->reserve($user, $amount, null, $incomingOrderId, $clientId, $promotionOrder);
         $this->applyRow($row);
 
         return $row;
@@ -343,6 +346,11 @@ class BonusService
         $transactionId = (int) ($transaction['transaction_id'] ?? 0);
 
         if (!$transactionId || !$spend->poster_client_id) {
+            return null;
+        }
+
+        // An order with a Poster promotion (gift or discount) earns no points.
+        if ($spend->promotion_order) {
             return null;
         }
 

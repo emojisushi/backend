@@ -59,6 +59,10 @@ class PosterPromotions extends Controller
             throw new ApplicationException('Эту акцию бэкенд применять не умеет: ' . $promotion->unsupportedReason());
         }
 
+        if (!$promotion->enabled && ($problem = $promotion->enableProblem())) {
+            throw new ApplicationException($problem);
+        }
+
         $promotion->enabled = !$promotion->enabled;
         $promotion->save();
 

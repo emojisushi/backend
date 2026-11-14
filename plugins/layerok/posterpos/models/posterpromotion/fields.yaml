@@ -7,6 +7,11 @@ fields:
         label: Poster ID
         disabled: true
         span: right
+    order_types:
+        label: К каким заказам применять
+        type: dropdown
+        comment: 'В Poster нет условия «самовывоз» или «доставка» — «Скидка самовывоз 10%» отличается от «Скидка 10%» только названием. Для скидки выбрать обязательно, иначе её нельзя включить. Для подарка «не выбрано» = все заказы.'
+        span: left
     _window_section:
         type: section
         label: Когда действует

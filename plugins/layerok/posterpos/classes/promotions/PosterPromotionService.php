@@ -36,17 +36,25 @@ class PosterPromotionService
     }
 
     /**
-     * Promotions the order qualifies for.
+     * Promotions the order qualifies for. Promotions do not combine, and a gift
+     * comes first: a takeaway order with two pizzas gets the free pizza (2+1) and
+     * not the 10% off. The discount (at most one can be enabled per order type, see
+     * PosterPromotion::enableProblem) applies only when there is no gift.
      *
-     * @param array $lines [['product' => Product, 'quantity' => int, 'poster_id' => int], ...]
-     * @return array[] each ['poster' => <Poster `promotion` entry>, 'name' => string, 'gift_name' => string, 'gift_count' => int]
+     * @param array $lines [['product' => Product, 'quantity' => int, 'poster_id' => int, 'price' => int kopecks], ...]
+     * @param string $orderType PosterPromotion::ORDER_TYPES_TAKEAWAY or ORDER_TYPES_COURIER
+     * @return array[] each with 'kind' => 'gift' | 'discount', 'promotion_id', 'poster' (the Poster
+     *   `promotion` entry) and 'name'; a gift adds 'gift_name', 'gift_count', a discount
+     *   adds 'percent', 'discount' (kopecks)
      */
-    public function applyToOrder(PosterAccount $account, Spot $spot, array $lines): array
+    public function applyToOrder(PosterAccount $account, Spot $spot, array $lines, string $orderType): array
     {
         $applied = [];
+        $promotions = $this->runningFor($account, $spot)
+            ->filter(fn(PosterPromotion $promotion) => $promotion->appliesToOrderType($orderType));
 
-        foreach ($this->runningFor($account, $spot) as $promotion) {
-            $rule = $promotion->rule();
+        foreach ($promotions as $promotion) {
+            $rule = $promotion->giftRule();
 
             if (!$rule) {
                 continue;
@@ -88,6 +96,7 @@ class PosterPromotionService
             $gift = $promotion->giftName() ? null : $this->localProduct($account, $rule->giftPosterId);
 
             $applied[] = [
+                'kind' => 'gift',
                 'promotion_id' => (int) $promotion->id,
                 'poster' => [
                     'id' => (int) $promotion->poster_promotion_id,
@@ -100,7 +109,107 @@ class PosterPromotionService
             ];
         }
 
-        return $applied;
+        // only one kind of promotion per order, and gifts come first
+        if ($applied) {
+            return $applied;
+        }
+
+        foreach ($promotions->filter(fn(PosterPromotion $promotion) => $promotion->isDiscount()) as $promotion) {
+            $discount = $this->discountFor($promotion, $lines);
+
+            if ($discount) {
+                return [$discount];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * The discount entry for these lines, or null when nothing in the order can be
+     * discounted. Products «без скидок» in Poster are left out, as on Poster's bill.
+     */
+    private function discountFor(PosterPromotion $promotion, array $lines): ?array
+    {
+        $rule = $promotion->discountRule();
+
+        if (!$rule || !$promotion->hasQualifyingProducts()) {
+            return null;
+        }
+
+        $excluded = array_flip($promotion->nodiscountPosterProductIds());
+        $involved = [];
+        $sum = 0;
+        $orderSum = 0;
+
+        foreach ($lines as $line) {
+            $posterId = (int) ($line['poster_id'] ?? 0);
+            $quantity = (int) ($line['quantity'] ?? 0);
+
+            if ($quantity < 1 || $posterId < 1) {
+                continue;
+            }
+
+            $orderSum += (int) ($line['price'] ?? 0) * $quantity;
+
+            if (isset($excluded[$posterId])) {
+                continue;
+            }
+
+            $involved[] = ['id' => $posterId, 'count' => $quantity];
+            $sum += (int) ($line['price'] ?? 0) * $quantity;
+        }
+
+        // Poster's "order sum from" condition, on the whole order
+        if ($orderSum < $rule->minSum) {
+            return null;
+        }
+
+        $discount = $rule->discountOn($sum);
+
+        if ($discount < 1) {
+            return null;
+        }
+
+        return [
+            'kind' => 'discount',
+            'promotion_id' => (int) $promotion->id,
+            'poster' => [
+                'id' => (int) $promotion->poster_promotion_id,
+                'involved_products' => $involved,
+            ],
+            'name' => $promotion->name,
+            'percent' => $rule->percent,
+            'discount' => $discount,
+        ];
+    }
+
+    /**
+     * The total discount in kopecks of applied promotions.
+     */
+    public static function discountTotal(array $applied): int
+    {
+        return (int) array_sum(array_map(
+            fn($entry) => ($entry['kind'] ?? 'gift') === 'discount' ? (int) ($entry['discount'] ?? 0) : 0,
+            $applied
+        ));
+    }
+
+    /**
+     * Only the gift entries of applied promotions. Entries stored before discounts
+     * existed have no kind and are gifts.
+     */
+    public static function gifts(array $applied): array
+    {
+        return array_values(array_filter($applied, fn($entry) => ($entry['kind'] ?? 'gift') === 'gift'));
+    }
+
+    /**
+     * Only the discount entries of applied promotions.
+     */
+    public static function discounts(array $applied): array
+    {
+        return array_values(array_filter($applied, fn($entry) => ($entry['kind'] ?? 'gift') === 'discount'));
     }
 
     /**

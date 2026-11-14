@@ -3,6 +3,7 @@
 namespace Layerok\PosterPos\Models;
 
 use Layerok\PosterPos\Classes\Promotions\CategoryGiftRule;
+use Layerok\PosterPos\Classes\Promotions\OrderDiscountRule;
 use Layerok\PosterPos\Classes\Promotions\PromotionSchedule;
 use Layerok\PosterPos\Classes\Promotions\PromotionWindow;
 use Model;
@@ -48,6 +49,8 @@ class PosterPromotion extends Model
         'active_to',
         'active_days',
         'qualifying',
+        'order_types',
+        'accrual_bonuses',
     ];
 
     // ISO week days, for labels and the admin form
@@ -66,7 +69,8 @@ class PosterPromotion extends Model
     ];
 
     // gift: Poster snapshot of the gift product, see PosterPromotionImporter::snapshot()
-    // qualifying: {category_id, product_ids} in Poster ids, see PosterPromotionImporter
+    // qualifying, in Poster ids, see PosterPromotionImporter:
+    //   gift: {category_id, product_ids}; discount: {nodiscount_category_ids, nodiscount_product_ids}
     // active_days: ISO week days the promotion applies on, [] for every day
     protected $jsonable = ['params', 'gift', 'qualifying', 'active_days'];
 
@@ -74,20 +78,47 @@ class PosterPromotion extends Model
         'auto_apply' => 'boolean',
         'removed_in_poster' => 'boolean',
         'enabled' => 'boolean',
+        // Poster's «Начислять бонусы» for the promotion
+        'accrual_bonuses' => 'boolean',
     ];
 
     public $belongsTo = [
         'poster_account' => PosterAccount::class,
     ];
 
-    public function rule(): ?CategoryGiftRule
+    public const ORDER_TYPES_ALL = 'all';
+    public const ORDER_TYPES_TAKEAWAY = 'takeaway';
+    public const ORDER_TYPES_COURIER = 'courier';
+
+    /**
+     * "N from a category, get a product free", or null when it is not that.
+     */
+    public function giftRule(): ?CategoryGiftRule
     {
         return CategoryGiftRule::fromParams((array) $this->params);
     }
 
+    /**
+     * "N% off the order", or null when it is not that.
+     */
+    public function discountRule(): ?OrderDiscountRule
+    {
+        return $this->giftRule() ? null : OrderDiscountRule::fromParams((array) $this->params);
+    }
+
+    public function isGift(): bool
+    {
+        return $this->giftRule() !== null;
+    }
+
+    public function isDiscount(): bool
+    {
+        return $this->discountRule() !== null;
+    }
+
     public function isImplemented(): bool
     {
-        return !$this->removed_in_poster && $this->rule() !== null;
+        return !$this->removed_in_poster && ($this->isGift() || $this->isDiscount());
     }
 
     /**
@@ -99,7 +130,107 @@ class PosterPromotion extends Model
             return 'Removed in Poster';
         }
 
-        return CategoryGiftRule::unsupportedReason((array) $this->params);
+        $params = (array) $this->params;
+
+        if ($this->isGift() || $this->isDiscount()) {
+            return null;
+        }
+
+        // The reason of the kind it looks like.
+        return (int) ($params['result_type'] ?? 0) === 3
+            ? OrderDiscountRule::unsupportedReason($params)
+            : CategoryGiftRule::unsupportedReason($params);
+    }
+
+    /**
+     * all / takeaway / courier, or null when not chosen. A gift with none chosen
+     * applies to all orders; a discount must have it chosen to be enabled, since
+     * nothing in Poster says which orders it is for.
+     */
+    public function orderTypes(): ?string
+    {
+        $value = (string) $this->order_types;
+
+        if (in_array($value, [self::ORDER_TYPES_ALL, self::ORDER_TYPES_TAKEAWAY, self::ORDER_TYPES_COURIER], true)) {
+            return $value;
+        }
+
+        return $this->isGift() ? self::ORDER_TYPES_ALL : null;
+    }
+
+    /**
+     * Whether it applies to an order of this type (takeaway / courier).
+     */
+    public function appliesToOrderType(string $orderType): bool
+    {
+        $types = $this->orderTypes();
+
+        return $types === self::ORDER_TYPES_ALL || $types === $orderType;
+    }
+
+    public function getOrderTypesOptions(): array
+    {
+        return [
+            '' => '— не выбрано —',
+            self::ORDER_TYPES_ALL => 'Все заказы',
+            self::ORDER_TYPES_TAKEAWAY => 'Только самовывоз',
+            self::ORDER_TYPES_COURIER => 'Только доставка курьером',
+        ];
+    }
+
+    /**
+     * Why it cannot be (or stay) enabled with its current settings, or null.
+     *  - a discount needs its order types chosen, since Poster does not say;
+     *  - only one discount per order type and account, since there is no telling
+     *    which one Poster would pick.
+     */
+    public function enableProblem(): ?string
+    {
+        // No points are earned on a promotion order. Ours are held back by the
+        // backend (BonusService::accrueWithheld); Poster's own accrual follows this
+        // setting of the promotion, so it has to be off there.
+        if ($this->accrual_bonuses) {
+            return 'В Poster у акции «' . $this->name . '» включено начисление бонусов — выключите его в Poster и нажмите «Импортировать из Poster»: по акционным заказам бонусы не начисляются';
+        }
+
+        if (!$this->isDiscount()) {
+            return null;
+        }
+
+        $types = $this->orderTypes();
+
+        if (!$types) {
+            return 'Выберите, к каким заказам применять скидку «' . $this->name . '»: в Poster это не указано';
+        }
+
+        $other = self::enabled()
+            ->where('poster_account_id', $this->poster_account_id)
+            ->where('id', '!=', (int) $this->id)
+            ->get()
+            ->first(fn(self $promotion) => $promotion->isDiscount()
+                && ($promotion->orderTypes() === self::ORDER_TYPES_ALL
+                    || $types === self::ORDER_TYPES_ALL
+                    || $promotion->orderTypes() === $types));
+
+        return $other
+            ? 'Уже включена скидка «' . $other->name . '» для этих заказов: одновременно может действовать только одна скидка'
+            : null;
+    }
+
+    public function getOrderTypesLabelAttribute(): string
+    {
+        $types = $this->orderTypes();
+
+        return $types ? $this->getOrderTypesOptions()[$types] : 'не выбрано';
+    }
+
+    /**
+     * Poster product ids that get no discount (marked «без скидок» in Poster, on the
+     * product or its category). Only for a discount; see PosterPromotionImporter.
+     */
+    public function nodiscountPosterProductIds(): array
+    {
+        return array_values(array_map('intval', (array) (((array) $this->qualifying)['nodiscount_product_ids'] ?? [])));
     }
 
     /**
@@ -176,6 +307,15 @@ class PosterPromotion extends Model
         }
 
         $this->active_days = $this->activeDays();
+
+        if (trim((string) $this->order_types) === '') {
+            $this->order_types = null;
+        }
+
+        // An enabled discount edited into a state it could not be enabled in.
+        if ($this->enabled && !$this->removed_in_poster && ($problem = $this->enableProblem())) {
+            throw new \October\Rain\Exception\ValidationException(['order_types' => $problem]);
+        }
     }
 
     /**
@@ -222,9 +362,17 @@ class PosterPromotion extends Model
         return array_values(array_map('intval', (array) (((array) $this->qualifying)['product_ids'] ?? [])));
     }
 
+    /**
+     * Whether the import has worked out its products: the qualifying ones for a
+     * gift, the ones excluded from the discount for a discount.
+     */
     public function hasQualifyingProducts(): bool
     {
-        return isset(((array) $this->qualifying)['product_ids']);
+        $qualifying = (array) $this->qualifying;
+
+        return $this->isDiscount()
+            ? isset($qualifying['nodiscount_product_ids'])
+            : isset($qualifying['product_ids']);
     }
 
     public function giftName(): ?string
