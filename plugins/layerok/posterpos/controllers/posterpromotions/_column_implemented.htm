@@ -1,11 +1,11 @@
 <?php $reason = $record->unsupportedReason(); ?>
-<?php if ($reason === null): ?>
+<?php if ($reason === null && $record->isGift()): ?>
     <?php
-    $rule = $record->rule();
+    $rule = $record->giftRule();
     $category = $record->category_name ?: ('категории Poster #' . (int) $rule->categoryPosterId);
     $gift = $record->giftName() ?: ('товар Poster #' . (int) $rule->giftPosterId);
     ?>
-    <span class="text-success">Да</span>
+    <span class="text-success">Да — подарок</span>
     <div class="text-muted" style="font-size: 12px;">
         <?= (int) $rule->requiredCount ?> шт. из «<?= e($category) ?>»
         → <?= (int) $rule->giftCount ?> × «<?= e($gift) ?>» в подарок<?= $rule->accumulate ? ' (за каждые ' . (int) $rule->requiredCount . ')' : ', один раз на заказ' ?>
@@ -21,7 +21,24 @@
     <?php if (!$record->giftName()): ?>
         <div class="text-warning" style="font-size: 12px;">Нет данных о подарке — нажмите «Импортировать из Poster»</div>
     <?php endif ?>
+<?php elseif ($reason === null && $record->isDiscount()): ?>
+    <span class="text-success">Да — скидка <?= (int) $record->discountRule()->percent ?>%</span>
+    <div class="text-muted" style="font-size: 12px;">
+        На весь заказ<?= $record->discountRule()->minSum > 0 ? ' от ' . e(rtrim(rtrim(number_format($record->discountRule()->minSum / 100, 2, '.', ''), '0'), '.')) . ' ₴' : '' ?>, кроме товаров «без скидок» в Poster.
+        Заказы: <?= e($record->order_types_label) ?>.
+    </div>
+    <?php if (!$record->orderTypes()): ?>
+        <div class="text-warning" style="font-size: 12px;">В Poster не указано, для каких заказов эта скидка — выберите на странице акции, иначе её нельзя включить</div>
+    <?php endif ?>
+    <?php if ($record->hasQualifyingProducts()): ?>
+        <div class="text-muted" style="font-size: 12px;">Без скидки в Poster: <?= count($record->nodiscountPosterProductIds()) ?> шт.</div>
+    <?php else: ?>
+        <div class="text-warning" style="font-size: 12px;">Список товаров «без скидок» не загружен — нажмите «Импортировать из Poster»</div>
+    <?php endif ?>
 <?php else: ?>
     <span class="text-muted">Нет</span>
     <div class="text-muted" style="font-size: 12px;"><?= e($reason) ?></div>
+<?php endif ?>
+<?php if ($reason === null && $record->accrual_bonuses): ?>
+    <div class="text-warning" style="font-size: 12px;">В Poster включено начисление бонусов — выключите его там и импортируйте снова, иначе акцию нельзя включить (по акционным заказам бонусы не начисляются)</div>
 <?php endif ?>

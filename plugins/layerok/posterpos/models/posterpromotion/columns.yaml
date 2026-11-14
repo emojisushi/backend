@@ -15,6 +15,9 @@ columns:
     window_label:
         label: Когда действует
         sortable: false
+    order_types_label:
+        label: Заказы
+        sortable: false
     spots_label:
         label: Заведения
         sortable: false

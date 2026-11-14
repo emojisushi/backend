@@ -19,6 +19,7 @@ return [
         'total'   => 'Разом',
         'bonuses_used' => 'Оплачено бонусами',
         'gifts' => 'Подарунки за акцією',
+        'promotion_discount' => 'Знижка за акцією «:name» (:percent%)',
         'delivery_method_name'   => 'Доставка',
         'change'   => 'Підготувати решту з',
         'payment_method_name'   => 'Оплата',

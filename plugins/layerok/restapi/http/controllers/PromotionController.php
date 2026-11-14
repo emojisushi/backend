@@ -50,36 +50,53 @@ class PromotionController extends Controller
                 && $promotion->isImplemented()
                 && $promotion->isScheduledInPosterAt($now))
             ->map(function (PosterPromotion $promotion) use ($service) {
-                $rule = $promotion->rule();
                 $account = $promotion->poster_account;
-                // Our ids of the products whose Poster category counts, so the apps
-                // count exactly what the order will.
-                $productIds = $service->localProductIds($account, $promotion->qualifyingPosterProductIds());
 
-                if (!$productIds) {
+                if (!$promotion->hasQualifyingProducts() || !$promotion->orderTypes()) {
                     return null;
                 }
 
-                $gift = $this->giftFor($promotion, $service);
-
-                if (!$gift) {
-                    return null;
-                }
-
-                return [
+                $common = [
                     'id' => $promotion->id,
                     'name' => $promotion->name,
-                    'product_ids' => $productIds,
-                    'category_name' => $promotion->category_name,
-                    'required_count' => $rule->requiredCount,
-                    'gift_count' => $rule->giftCount,
-                    'accumulate' => $rule->accumulate,
+                    // all / takeaway / courier
+                    'order_types' => $promotion->orderTypes(),
                     // Kyiv time; null when the promotion runs all day
                     'active_from' => $promotion->hasWindow() ? $promotion->active_from : null,
                     'active_to' => $promotion->hasWindow() ? $promotion->active_to : null,
                     // ISO week days (1 = Monday) in Kyiv; [] for every day
                     'active_days' => $promotion->activeDays(),
                     'spot_ids' => $promotion->spots()->pluck('id')->map(fn($id) => (int) $id)->values(),
+                ];
+
+                if ($promotion->isDiscount()) {
+                    return $common + [
+                        'kind' => 'discount',
+                        'percent' => $promotion->discountRule()->percent,
+                        // the order sum (kopecks) it starts from, 0 for any order
+                        'min_sum' => $promotion->discountRule()->minSum,
+                        // our ids of the products Poster gives no discount on
+                        'nodiscount_product_ids' => $service->localProductIds($account, $promotion->nodiscountPosterProductIds()),
+                    ];
+                }
+
+                $rule = $promotion->giftRule();
+                // Our ids of the products whose Poster category counts, so the apps
+                // count exactly what the order will.
+                $productIds = $service->localProductIds($account, $promotion->qualifyingPosterProductIds());
+                $gift = $this->giftFor($promotion, $service);
+
+                if (!$productIds || !$gift) {
+                    return null;
+                }
+
+                return $common + [
+                    'kind' => 'gift',
+                    'product_ids' => $productIds,
+                    'category_name' => $promotion->category_name,
+                    'required_count' => $rule->requiredCount,
+                    'gift_count' => $rule->giftCount,
+                    'accumulate' => $rule->accumulate,
                     'gift' => $gift,
                 ];
             })
@@ -109,7 +126,7 @@ class PromotionController extends Controller
             ];
         }
 
-        $product = $service->localProduct($promotion->poster_account, $promotion->rule()->giftPosterId);
+        $product = $service->localProduct($promotion->poster_account, $promotion->giftRule()->giftPosterId);
 
         if (!$product) {
             return null;

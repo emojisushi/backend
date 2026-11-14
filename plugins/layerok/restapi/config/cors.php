@@ -12,7 +12,9 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    // Readable from JS on the city subdomains (cross-origin), e.g.
+    // response.headers['x-catalog-cache'] in axios.
+    'exposed_headers' => ['X-Catalog-Cache'],
 
     'max_age' => 0,
 

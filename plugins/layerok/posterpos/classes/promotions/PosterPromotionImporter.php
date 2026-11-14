@@ -55,6 +55,7 @@ class PosterPromotionImporter
                     'date_start' => PromotionSchedule::normalizeDate($raw['date_start'] ?? null),
                     'date_end' => PromotionSchedule::normalizeDate($raw['date_end'] ?? null),
                     'auto_apply' => (string) ($raw['auto_apply'] ?? '0') === '1',
+                    'accrual_bonuses' => (string) ($raw['accrual_bonuses'] ?? '0') === '1',
                     'removed_in_poster' => false,
                     'imported_at' => $now,
                 ]);
@@ -65,8 +66,15 @@ class PosterPromotionImporter
 
                 if (!$model->isImplemented()) {
                     $model->enabled = false;
-                } else {
+                } elseif ($model->isGift()) {
                     $this->snapshot($model);
+                }
+
+                // Changed in Poster into something that cannot stay on, e.g. its
+                // bonus accrual switched on: off rather than failing the import.
+                if ($model->enabled && $model->enableProblem()) {
+                    $model->enabled = false;
+                    $result['errors'][] = 'Выключена: ' . $model->enableProblem();
                 }
 
                 $model->save();
@@ -96,10 +104,13 @@ class PosterPromotionImporter
     }
 
     /**
-     * Works out, from the whole Poster menu, which products count towards each
-     * supported promotion of the account: those whose Poster category is the
-     * promotion's category. Only that exact category — a subcategory would pull
-     * in e.g. «Комбо Набори», which is under «Роли» on prod.
+     * Works out from the whole Poster menu, for each supported promotion of the
+     * account:
+     *  - gift: the products that count towards it, those whose Poster category is
+     *    the promotion's category. Only that exact category — a subcategory would
+     *    pull in e.g. «Комбо Набори», which is under «Роли» on prod.
+     *  - discount: the products Poster gives no discount on («без скидок» on the
+     *    product or on its category).
      */
     public function refreshQualifying(PosterAccount $account): void
     {
@@ -110,24 +121,46 @@ class PosterPromotionImporter
         }
 
         $this->init($account);
-        $response = (object) PosterApi::makeApiRequest('menu.getProducts', 'get');
+        $products = $this->request('menu.getProducts');
+        $nodiscountCategories = [];
 
-        if (isset($response->error) || !isset($response->response) || !is_array($response->response)) {
-            throw new \RuntimeException((string) ($response->message ?? 'Poster returned no products'));
+        if ($promotions->contains(fn(PosterPromotion $promotion) => $promotion->isDiscount())) {
+            foreach ($this->request('menu.getCategories') as $category) {
+                if ((int) ($category->nodiscount ?? 0) === 1) {
+                    $nodiscountCategories[] = (int) $category->category_id;
+                }
+            }
+            sort($nodiscountCategories);
         }
 
         $byCategory = [];
+        $nodiscountProducts = [];
 
-        foreach ($response->response as $product) {
-            $byCategory[(int) ($product->menu_category_id ?? 0)][] = (int) $product->product_id;
+        foreach ($products as $product) {
+            $categoryId = (int) ($product->menu_category_id ?? 0);
+            $byCategory[$categoryId][] = (int) $product->product_id;
+
+            if ((int) ($product->nodiscount ?? 0) === 1 || in_array($categoryId, $nodiscountCategories, true)) {
+                $nodiscountProducts[] = (int) $product->product_id;
+            }
         }
 
-        foreach ($promotions as $promotion) {
-            $categoryId = $promotion->rule()->categoryPosterId;
-            $productIds = $byCategory[$categoryId] ?? [];
-            sort($productIds);
+        sort($nodiscountProducts);
 
-            $promotion->qualifying = ['category_id' => $categoryId, 'product_ids' => $productIds];
+        foreach ($promotions as $promotion) {
+            if ($promotion->isDiscount()) {
+                $promotion->qualifying = [
+                    'nodiscount_category_ids' => $nodiscountCategories,
+                    'nodiscount_product_ids' => $nodiscountProducts,
+                ];
+            } else {
+                $categoryId = $promotion->giftRule()->categoryPosterId;
+                $productIds = $byCategory[$categoryId] ?? [];
+                sort($productIds);
+
+                $promotion->qualifying = ['category_id' => $categoryId, 'product_ids' => $productIds];
+            }
+
             $promotion->save();
         }
     }
@@ -158,6 +191,7 @@ class PosterPromotionImporter
         }
 
         $categoryId = null;
+        $productNodiscount = false;
 
         if ($action !== 'removed') {
             $this->init($account);
@@ -169,24 +203,47 @@ class PosterPromotionImporter
             }
 
             $categoryId = (int) ($product->menu_category_id ?? 0);
+            $productNodiscount = (int) ($product->nodiscount ?? 0) === 1;
         }
 
         foreach ($promotions as $promotion) {
-            $ids = $promotion->qualifyingPosterProductIds();
+            $qualifying = (array) $promotion->qualifying;
+
+            if ($promotion->isDiscount()) {
+                // A removed product no longer matters; otherwise it is excluded if
+                // it or (as stored on import) its category is «без скидок».
+                $key = 'nodiscount_product_ids';
+                $listed = $categoryId !== null && ($productNodiscount
+                    || in_array($categoryId, array_map('intval', (array) ($qualifying['nodiscount_category_ids'] ?? [])), true));
+            } else {
+                $key = 'product_ids';
+                $listed = $categoryId !== null && $categoryId === $promotion->giftRule()->categoryPosterId;
+            }
+
+            $ids = array_values(array_map('intval', (array) ($qualifying[$key] ?? [])));
             sort($ids);
-            $counts = $categoryId !== null && $categoryId === $promotion->rule()->categoryPosterId;
-            $next = $counts
+            $next = $listed
                 ? array_values(array_unique(array_merge($ids, [$posterProductId])))
                 : array_values(array_diff($ids, [$posterProductId]));
             sort($next);
 
             if ($next !== $ids) {
-                $qualifying = (array) $promotion->qualifying;
-                $qualifying['product_ids'] = $next;
+                $qualifying[$key] = $next;
                 $promotion->qualifying = $qualifying;
                 $promotion->save();
             }
         }
+    }
+
+    private function request(string $method): array
+    {
+        $response = (object) PosterApi::makeApiRequest($method, 'get');
+
+        if (isset($response->error) || !isset($response->response) || !is_array($response->response)) {
+            throw new \RuntimeException((string) ($response->message ?? "Poster returned nothing for $method"));
+        }
+
+        return $response->response;
     }
 
     private function implementedPromotions(PosterAccount $account)
@@ -216,7 +273,7 @@ class PosterPromotionImporter
      */
     private function snapshot(PosterPromotion $model): void
     {
-        $rule = $model->rule();
+        $rule = $model->giftRule();
 
         try {
             $product = json_decode(json_encode(

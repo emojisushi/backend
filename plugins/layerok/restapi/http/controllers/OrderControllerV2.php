@@ -159,6 +159,8 @@ class OrderControllerV2 extends Controller
             'product' => $product,
             'quantity' => (int) $posterProducts[$key]['count'],
             'poster_id' => (int) $posterProducts[$key]['product_id'],
+            // the same price $total is summed from, in kopecks
+            'price' => (int) $product->prices[0]->price,
         ])->values()->all();
 
         // no_cutlery suppresses sticks/training_sticks entirely — no cutlery-related
@@ -257,9 +259,14 @@ class OrderControllerV2 extends Controller
             $incomingOrder['client_address'] = $clientAddress;
         }
 
-        // Gifts are free, so they stay out of $total and do not count towards the
-        // area minimum, the bonus limit or the WayForPay charge.
-        $appliedPromotions = $this->applyPosterPromotions($poster_account, $spot, $promotionLines);
+        // Gifts are free, so they stay out of $total. A discount promotion lowers
+        // what the client pays ($payable): the bonus limit, the WayForPay charge and
+        // the receipt use that. The area minimum and the free delivery threshold
+        // stay on the full $total, as before.
+        $orderType = $shippingMethod->code === ShippingMethodCode::COURIER
+            ? PosterPromotion::ORDER_TYPES_COURIER
+            : PosterPromotion::ORDER_TYPES_TAKEAWAY;
+        $appliedPromotions = $this->applyPosterPromotions($poster_account, $spot, $promotionLines, $orderType);
 
         if ($appliedPromotions === null) {
             $appliedPromotions = [];
@@ -270,6 +277,9 @@ class OrderControllerV2 extends Controller
         if ($appliedPromotions) {
             $incomingOrder['promotion'] = array_column($appliedPromotions, 'poster');
         }
+
+        $promotionDiscount = PosterPromotionService::discountTotal($appliedPromotions);
+        $payable = $total - $promotionDiscount;
 
         $delivery_time += $this->extraWaitMinutes($spot, $products);
 
@@ -287,9 +297,10 @@ class OrderControllerV2 extends Controller
                 ? 'layerok.restapi::lang.receipt.deliver_at'
                 : 'layerok.restapi::lang.receipt.ready_at'
             ) . ': ' . self::formatDeliveryAt($deliveryAt),
-            // So the gift is seen on the order even where Poster does not show
-            // the promotion. Before the bonus marker, which must stay last.
+            // So the gift and the discount are seen on the order even where Poster
+            // does not show the promotion. Before the bonus marker, which must stay last.
             self::formatGifts($appliedPromotions),
+            self::formatDiscounts($appliedPromotions),
         ])->filter()->join(' || ');
 
         $data['delivery_at'] = $deliveryAt;
@@ -368,6 +379,22 @@ class OrderControllerV2 extends Controller
                 if ($usedBonus > $limit) {
                     return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [trans("layerok.restapi::validation.bonus_limit", ['max' => $max])]]], 400);
                 }
+
+                // The client always pays at least the area's minimum order for a
+                // courier: with a minimum of 200 an order of 205 takes 5 points.
+                $minPayment = $this->minimumPayment($shippingMethod, $area);
+                $payableLimit = intdiv(max(0, $payable - $minPayment), 100) * 100;
+
+                if ($usedBonus > $payableLimit) {
+                    return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [
+                        $minPayment > 0
+                            ? trans('layerok.restapi::validation.bonus_min_payment', [
+                                'max' => intdiv($payableLimit, 100),
+                                'min' => intdiv($minPayment, 100),
+                            ])
+                            : trans('layerok.restapi::validation.bonus_over_total', ['max' => intdiv($payableLimit, 100)]),
+                    ]]], 400);
+                }
             }
         }
 
@@ -419,7 +446,9 @@ class OrderControllerV2 extends Controller
             $reservations = $stock->reserveOrFail($spot->id, $stock->quantitiesFromCart($cart));
 
             try {
-                $order = $this->createOnlineOrder($incomingOrder, $total, $cart, $spot->id, $deliveryAt, $overriddenTime, $appliedPromotions);
+                // The discounted total: it is what Poster's bill comes to, and it is
+                // reported back to Poster as paid once the payment arrives.
+                $order = $this->createOnlineOrder($incomingOrder, $payable, $cart, $spot->id, $deliveryAt, $overriddenTime, $appliedPromotions);
             } catch (\Throwable $e) {
                 $stock->release($reservations);
 
@@ -437,7 +466,7 @@ class OrderControllerV2 extends Controller
             // payment gives them back from the WayForPay service-url handler.
             if ($user && $usedBonus > 0) {
                 $service = new BonusService();
-                $row = $service->reserve($bonusUser, $usedBonus, (int) $order->id, null, $bonusClientId);
+                $row = $service->reserve($bonusUser, $usedBonus, (int) $order->id, null, $bonusClientId, (bool) $appliedPromotions);
 
                 // If Poster did not actually take the points, do not discount the
                 // charge — the client would pay less and keep the points.
@@ -456,7 +485,7 @@ class OrderControllerV2 extends Controller
             // Prepaid orders are charged the discounted amount. Poster is told the
             // full total was prepaid (see WayForPayController::sendPosterOrder), so
             // the bill arrives fully paid with the points folded into the payment.
-            $way_total = ($total - $usedBonus) / 100;
+            $way_total = ($payable - $usedBonus) / 100;
 
             $credential = new AccountSecretCredential($merchantAccount, $merchantSecretKey);
             $products = [
@@ -674,7 +703,7 @@ class OrderControllerV2 extends Controller
             // everywhere — including the register — before the client can order again.
             // A rejected order gives them back via the Poster webhook.
             if ($usedBonus > 0) {
-                (new BonusService())->apply($bonusUser, $usedBonus, (int) $poster_order_id, $bonusClientId);
+                (new BonusService())->apply($bonusUser, $usedBonus, (int) $poster_order_id, $bonusClientId, (bool) $appliedPromotions);
             }
         }
 
@@ -876,13 +905,16 @@ class OrderControllerV2 extends Controller
                 )->newLine();
             });
 
-        if ($appliedPromotions) {
+        $gifts = PosterPromotionService::gifts($appliedPromotions);
+        $discount = PosterPromotionService::discountTotal($appliedPromotions);
+
+        if ($gifts) {
             $receipt
                 ->newLine()
                 ->b(trans('layerok.restapi::lang.receipt.gifts'))
                 ->colon()
                 ->newLine()
-                ->map($appliedPromotions, function ($applied) {
+                ->map($gifts, function ($applied) {
                     $this->product(
                         htmlspecialchars($applied['gift_name'] . ' (' . $applied['name'] . ')'),
                         htmlspecialchars((string) $applied['gift_count'])
@@ -890,17 +922,27 @@ class OrderControllerV2 extends Controller
                 });
         }
 
+        $receipt->newLine();
+
+        foreach (PosterPromotionService::discounts($appliedPromotions) as $applied) {
+            $receipt->field(
+                htmlspecialchars(trans('layerok.restapi::lang.receipt.promotion_discount', [
+                    'name' => $applied['name'],
+                    'percent' => $applied['percent'],
+                ])),
+                '−' . self::formatReceiptMoney($money, (int) $applied['discount'])
+            );
+        }
+
         $receipt
-            ->newLine()
             ->field(
                 trans('layerok.restapi::lang.receipt.bonuses_used'),
-                $usedBonus > 0 ? $money->format($usedBonus, null, Currency::$defaultCurrency) : null
+                $usedBonus > 0 ? self::formatReceiptMoney($money, $usedBonus) : null
             )
-            ->field(trans('layerok.restapi::lang.receipt.total'), $money->format(
-                $total - $usedBonus,
-                null,
-                Currency::$defaultCurrency
-            ));
+            ->field(
+                trans('layerok.restapi::lang.receipt.total'),
+                self::formatReceiptMoney($money, $total - $discount - $usedBonus)
+            );
 
         return $receipt->getText();
     }
@@ -921,17 +963,66 @@ class OrderControllerV2 extends Controller
     }
 
     /**
+     * Kopecks as the receipt shows money. The shop's formatter rounds to whole
+     * hryvnias, which loses the kopecks a percentage discount leaves, so those are
+     * written out: 102100 -> "1,021 ₴", 102120 -> "1,021.20 ₴".
+     */
+    private static function formatReceiptMoney(Money $money, int $kopecks): string
+    {
+        if ($kopecks % 100 === 0) {
+            return $money->format($kopecks, null, Currency::$defaultCurrency);
+        }
+
+        return number_format($kopecks / 100, 2, '.', ',') . ' ₴';
+    }
+
+    /**
      * "Подарунки за акцією: Піца Спешл × 1" for the Poster comment, null without gifts.
      */
     public static function formatGifts(array $appliedPromotions): ?string
     {
-        if (!$appliedPromotions) {
+        $gifts = PosterPromotionService::gifts($appliedPromotions);
+
+        if (!$gifts) {
             return null;
         }
 
-        return trans('layerok.restapi::lang.receipt.gifts') . ': ' . collect($appliedPromotions)
+        return trans('layerok.restapi::lang.receipt.gifts') . ': ' . collect($gifts)
             ->map(fn($applied) => $applied['gift_name'] . ' × ' . $applied['gift_count'])
             ->join(', ');
+    }
+
+    /**
+     * "Знижка за акцією «Скидка самовывоз 10%» (10%): −35 ₴" for the Poster
+     * comment, so the cashier can check the bill; null without a discount.
+     */
+    public static function formatDiscounts(array $appliedPromotions): ?string
+    {
+        $discounts = PosterPromotionService::discounts($appliedPromotions);
+
+        if (!$discounts) {
+            return null;
+        }
+
+        return collect($discounts)
+            ->map(fn($applied) => trans('layerok.restapi::lang.receipt.promotion_discount', [
+                'name' => $applied['name'],
+                'percent' => $applied['percent'],
+            ]) . ': −' . rtrim(rtrim(number_format($applied['discount'] / 100, 2, '.', ''), '0'), '.') . ' ₴')
+            ->join(', ');
+    }
+
+    /**
+     * The least a client pays (kopecks) after points: the area's minimum order for
+     * a courier, nothing for takeaway.
+     */
+    private function minimumPayment(ShippingMethod $shippingMethod, $area): int
+    {
+        if ($shippingMethod->code !== ShippingMethodCode::COURIER || !$area) {
+            return 0;
+        }
+
+        return max(0, (int) round(((float) $area->min) * 100));
     }
 
     /**
@@ -939,10 +1030,10 @@ class OrderControllerV2 extends Controller
      * gets no gift, which the operator can still add on the register. Null when
      * the promotions could not be worked out at all.
      */
-    private function applyPosterPromotions(PosterAccount $account, Spot $spot, array $lines): ?array
+    private function applyPosterPromotions(PosterAccount $account, Spot $spot, array $lines, string $orderType): ?array
     {
         try {
-            return (new PosterPromotionService())->applyToOrder($account, $spot, $lines);
+            return (new PosterPromotionService())->applyToOrder($account, $spot, $lines, $orderType);
         } catch (\Throwable $e) {
             \Log::error('Poster promotions were not applied: ' . $e->getMessage());
 
