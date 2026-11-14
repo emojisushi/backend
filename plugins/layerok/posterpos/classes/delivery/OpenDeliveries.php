@@ -154,6 +154,30 @@ class OpenDeliveries
         return self::localTime($delivery->delivery_time ?? null);
     }
 
+    /**
+     * A receipt time from dash.getTransactions, in the account's zone. date_start
+     * and date_close come as Unix time in milliseconds, the *_date fields as local
+     * "Y-m-d H:i:s"; both are accepted. Null for an empty or zero value.
+     */
+    public static function posterTime($value): ?Carbon
+    {
+        if (is_numeric($value)) {
+            $number = (int) $value;
+
+            if ($number <= 0) {
+                return null;
+            }
+
+            $time = $number > 9999999999
+                ? Carbon::createFromTimestampMs($number)
+                : Carbon::createFromTimestamp($number);
+
+            return $time->setTimezone(self::TIMEZONE);
+        }
+
+        return self::localTime($value);
+    }
+
     public static function localTime($value): ?Carbon
     {
         if (empty($value) || str_starts_with((string) $value, '0000')) {

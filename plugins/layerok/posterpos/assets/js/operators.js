@@ -5,6 +5,32 @@
 
     var timer = null, loading = false, screen = null;
 
+    // "Чеки доставки": the last loaded groups and the chosen status, so switching
+    // the filter re-renders at once without asking Poster again.
+    var RECEIPT_FILTERS = [
+        { key: 'all', label: 'Все' },
+        { key: 'open', label: 'Открытые' },
+        { key: 'on_way', label: 'В пути' },
+        { key: 'closed', label: 'Закрытые' }
+    ];
+    var RECEIPT_TONES = { open: 'info', on_way: 'warn', closed: 'ok' };
+    var FILTER_STORAGE_KEY = 'operators.receiptFilter';
+    var receiptGroups = [];
+    var receiptFilter = readFilter();
+
+    function readFilter() {
+        try {
+            var saved = window.localStorage.getItem(FILTER_STORAGE_KEY);
+            return RECEIPT_FILTERS.some(function (f) { return f.key === saved; }) ? saved : 'all';
+        } catch (e) {
+            return 'all';
+        }
+    }
+
+    function saveFilter(value) {
+        try { window.localStorage.setItem(FILTER_STORAGE_KEY, value); } catch (e) { /* private mode */ }
+    }
+
     function load(silent) {
         if (loading) {
             return;
@@ -13,7 +39,7 @@
         loading = true;
 
         if (!silent) {
-            $('#opSpots, #opEvents, #opLate').html('<div class="op-empty">Загрузка…</div>');
+            $('#opSpots, #opEvents, #opLate, #opReceipts').html('<div class="op-empty">Загрузка…</div>');
         }
 
         $.request('onLoadOverview', {
@@ -33,6 +59,8 @@
                 renderLate(data.late || [], data.late_after_minutes);
                 renderSummary(data.summary || {});
                 renderUnaccepted(data.unaccepted || []);
+                receiptGroups = data.receipts || [];
+                renderReceipts();
                 $('#opUpdated').text('обновлено ' + (data.updated_at || ''));
             },
             error: function () {
@@ -139,6 +167,65 @@
         }).join(''));
     }
 
+    function renderReceipts() {
+        var counts = { all: 0, open: 0, on_way: 0, closed: 0 };
+
+        receiptGroups.forEach(function (g) {
+            (g.receipts || []).forEach(function (r) {
+                counts.all++;
+                counts[r.status] = (counts[r.status] || 0) + 1;
+            });
+        });
+
+        $('#opReceiptFilter').html(RECEIPT_FILTERS.map(function (f) {
+            return '<button type="button" class="op-filter-btn' + (f.key === receiptFilter ? ' active' : '') +
+                '" data-filter="' + f.key + '">' + f.label + ' <span>' + (counts[f.key] || 0) + '</span></button>';
+        }).join(''));
+
+        var groups = receiptGroups
+            .map(function (g) {
+                return {
+                    name: g.name,
+                    receipts: (g.receipts || []).filter(function (r) {
+                        return receiptFilter === 'all' || r.status === receiptFilter;
+                    })
+                };
+            })
+            .filter(function (g) { return g.receipts.length; });
+
+        if (!groups.length) {
+            $('#opReceipts').html('<div class="op-empty">Чеков нет</div>');
+            return;
+        }
+
+        $('#opReceipts').html(groups.map(function (g) {
+            return '<div class="op-rgroup">' +
+                '<div class="op-rgroup-head"><b>' + escapeHtml(g.name) + '</b><span>' + g.receipts.length + ' ' + plural(g.receipts.length, 'чек', 'чека', 'чеков') + '</span></div>' +
+                '<div class="op-receipt op-receipt-labels">' +
+                    '<span>Чек</span><span>Принят</span><span>Закрыт</span><span>Статус</span><span>Адрес · клиент</span><span>Курьер</span><span>Сумма</span>' +
+                '</div>' +
+                g.receipts.map(function (r) {
+                    return '<div class="op-receipt">' +
+                        '<span class="op-receipt-num">#' + escapeHtml(r.id) + '</span>' +
+                        '<span class="op-receipt-time">' + escapeHtml(r.accepted || '—') + '</span>' +
+                        '<span class="op-receipt-time' + (r.closed ? '' : ' none') + '">' + escapeHtml(r.closed || '—') + '</span>' +
+                        '<span><span class="op-pill ' + (RECEIPT_TONES[r.status] || 'muted') + '">' + escapeHtml(r.status_label) + '</span></span>' +
+                        '<span class="op-receipt-desc"><b>' + escapeHtml(r.address || '—') + '</b><span>' + escapeHtml(r.client) + '</span></span>' +
+                        '<span class="op-receipt-courier' + (r.courier ? '' : ' none') + '">' + escapeHtml(r.courier || 'не назначен') + '</span>' +
+                        '<span class="op-receipt-sum">' + r.amount + ' ₴</span>' +
+                    '</div>';
+                }).join('') +
+            '</div>';
+        }).join(''));
+    }
+
+    function plural(n, one, few, many) {
+        var mod10 = n % 10, mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) { return one; }
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) { return few; }
+        return many;
+    }
+
     function escapeHtml(value) {
         var str = String(value === null || value === undefined ? '' : value);
 
@@ -187,6 +274,11 @@
         .on('change', '#opCity', function () {
             load(false);
             restartTimer();
+        })
+        .on('click', '#opReceiptFilter .op-filter-btn', function () {
+            receiptFilter = $(this).data('filter');
+            saveFilter(receiptFilter);
+            renderReceipts();
         });
 
     $(document).ready(init);
