@@ -96,6 +96,24 @@
 .op-receipt-courier { font-weight: 700; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .op-receipt-sum { font-weight: 800; text-align: right; }
 
+/* rows that open the order history */
+.op-clickable { cursor: pointer; }
+.op-clickable:hover { background: #fafaf8; }
+
+/* order history window */
+.op-modal { position: fixed; inset: 0; z-index: 10000; background: rgba(17,17,17,.45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; overflow-y: auto; }
+.op-modal-box { width: 100%; max-width: 760px; background: #fff; border-radius: 8px; padding: 18px 20px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+.op-modal-close { border: 0; background: #f3f3f3; width: 30px; height: 30px; border-radius: 50%; font-size: 18px; line-height: 1; color: #555; cursor: pointer; flex-shrink: 0; }
+.op-modal-close:hover { background: #e8e8e8; color: #111; }
+.op-history-head { display: flex; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.op-history-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.op-fact { background: #f7f7f5; border-radius: 7px; padding: 8px 9px; min-width: 0; }
+.op-fact span { display: block; font-size: 9px; color: #888; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; }
+.op-fact b { display: block; font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.op-fact-wide { grid-column: 1 / -1; }
+.op-history-events { margin-top: 16px; }
+.op-history-events .op-event:last-child { border-bottom: 0; }
+
 @media (max-width: 1300px) {
     .op-grid { grid-template-columns: minmax(0, 1fr) 360px; }
     /* late orders stay top right; the side column moves under both */
@@ -115,4 +133,5 @@
     .op-receipt-desc { grid-column: 1 / 4; }
     .op-receipt-courier { grid-column: 4; }
     .op-receipt-sum { grid-column: 4; }
+    .op-history-facts { grid-template-columns: 1fr 1fr; }
 }

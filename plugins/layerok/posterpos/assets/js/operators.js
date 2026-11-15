@@ -104,15 +104,101 @@
             return;
         }
 
-        $('#opEvents').html(events.map(function (e) {
-            return '<div class="op-event">' +
-                '<div class="op-event-time">' + escapeHtml(e.time) + '</div>' +
-                '<div class="op-event-spot">' + escapeHtml(e.spot) + '</div>' +
-                '<div class="op-event-desc"><b>' + escapeHtml(e.title) + '</b>' +
-                    (e.detail ? '<span>' + escapeHtml(e.detail) + '</span>' : '') + '</div>' +
-                '<div>' + (e.badge ? '<span class="op-pill ' + escapeHtml(e.tone) + '">' + escapeHtml(e.badge) + '</span>' : '') + '</div>' +
+        $('#opEvents').html(events.map(function (e) { return eventHtml(e, true); }).join(''));
+    }
+
+    /**
+     * One event line, for the feed and the history window. In the feed a line
+     * that belongs to an order opens that order's history.
+     */
+    function eventHtml(e, clickable) {
+        var open = clickable && (e.transaction_id || e.incoming_order_id);
+
+        return '<div class="op-event' + (open ? ' op-clickable' : '') + '"' +
+                (open ? orderAttrs(e.transaction_id, e.incoming_order_id) : '') + '>' +
+            '<div class="op-event-time">' + escapeHtml(e.time) + '</div>' +
+            '<div class="op-event-spot">' + escapeHtml(e.spot) + '</div>' +
+            '<div class="op-event-desc"><b>' + escapeHtml(e.title) + '</b>' +
+                (e.detail ? '<span>' + escapeHtml(e.detail) + '</span>' : '') + '</div>' +
+            '<div>' + (e.badge ? '<span class="op-pill ' + escapeHtml(e.tone) + '">' + escapeHtml(e.badge) + '</span>' : '') + '</div>' +
+        '</div>';
+    }
+
+    function orderAttrs(transactionId, incomingId) {
+        return ' data-transaction-id="' + escapeHtml(transactionId || '') + '"' +
+            ' data-incoming-id="' + escapeHtml(incomingId || '') + '"' +
+            ' title="История заказа"';
+    }
+
+    // --- order history window ---------------------------------------------
+
+    function openHistory(transactionId, incomingId) {
+        closeHistory();
+
+        $('body').append(
+            '<div class="op-modal" id="opHistory" role="dialog" aria-modal="true">' +
+                '<div class="op-modal-box">' +
+                    '<div class="op-card-head">' +
+                        '<div><div class="op-eyebrow">История заказа</div><h3 id="opHistoryTitle">' +
+                            escapeHtml(transactionId ? 'Чек #' + transactionId : 'Онлайн-заказ #' + incomingId) + '</h3></div>' +
+                        '<button type="button" class="op-modal-close" aria-label="Закрыть">×</button>' +
+                    '</div>' +
+                    '<div id="opHistoryBody"><div class="op-empty">Загрузка…</div></div>' +
+                '</div>' +
+            '</div>'
+        );
+
+        $.request('onLoadOrderHistory', {
+            data: { transaction_id: transactionId || '', incoming_order_id: incomingId || '' },
+            success: function (data) {
+                // closed, or another order opened, while this one was loading
+                if (!$('#opHistory').length) { return; }
+                if (data.title) { $('#opHistoryTitle').text(data.title); }
+                $('#opHistoryBody').html(historyHtml(data));
+            },
+            error: function () {
+                $('#opHistoryBody').html('<div class="op-empty">Не удалось загрузить историю</div>');
+            }
+        });
+    }
+
+    function historyHtml(data) {
+        var r = data.receipt;
+        var html = data.error ? '<div class="op-error">' + escapeHtml(data.error) + '</div>' : '';
+
+        if (r) {
+            html += '<div class="op-history-head">' +
+                '<span class="op-pill ' + (RECEIPT_TONES[r.status] || 'muted') + '">' + escapeHtml(r.status_label) + '</span>' +
+                (r.spot ? '<span class="op-event-spot">' + escapeHtml(r.spot) + '</span>' : '') +
+            '</div>' +
+            '<div class="op-history-facts">' +
+                fact('Принят', r.accepted) +
+                fact('Закрыт', r.closed) +
+                fact('Доставить до', r.due) +
+                fact('Курьер', r.courier || 'не назначен') +
+                fact('Сумма', r.amount + ' ₴') +
+                fact('Клиент', r.client + (r.phone ? ' · ' + r.phone : '')) +
+                '<div class="op-fact op-fact-wide"><span>Адрес</span><b>' + escapeHtml(r.address || '—') + '</b></div>' +
             '</div>';
-        }).join(''));
+        }
+
+        var events = data.events || [];
+
+        html += '<div class="op-history-events"><div class="op-eyebrow">События</div>' +
+            (events.length
+                ? events.map(function (e) { return eventHtml(e, false); }).join('')
+                : '<div class="op-empty">Событий по этому заказу нет — они записываются из вебхуков Poster</div>') +
+        '</div>';
+
+        return html;
+    }
+
+    function fact(label, value) {
+        return '<div class="op-fact"><span>' + label + '</span><b>' + escapeHtml(value || '—') + '</b></div>';
+    }
+
+    function closeHistory() {
+        $('#opHistory').remove();
     }
 
     function renderLate(late, threshold) {
@@ -205,7 +291,7 @@
                     '<span>Чек</span><span>Принят</span><span>Закрыт</span><span>Статус</span><span>Адрес · клиент</span><span>Курьер</span><span>Сумма</span>' +
                 '</div>' +
                 g.receipts.map(function (r) {
-                    return '<div class="op-receipt">' +
+                    return '<div class="op-receipt op-clickable"' + orderAttrs(r.id, null) + '>' +
                         '<span class="op-receipt-num">#' + escapeHtml(r.id) + '</span>' +
                         '<span class="op-receipt-time">' + escapeHtml(r.accepted || '—') + '</span>' +
                         '<span class="op-receipt-time' + (r.closed ? '' : ' none') + '">' + escapeHtml(r.closed || '—') + '</span>' +
@@ -252,6 +338,7 @@
 
         if (!el) {
             if (timer) { clearInterval(timer); timer = null; }
+            closeHistory();
             screen = null;
             return;
         }
@@ -279,6 +366,19 @@
             receiptFilter = $(this).data('filter');
             saveFilter(receiptFilter);
             renderReceipts();
+        })
+        .on('click', '.operators-screen .op-clickable', function () {
+            // attr, not data(): ids stay strings, an empty one stays ""
+            openHistory($(this).attr('data-transaction-id'), $(this).attr('data-incoming-id'));
+        })
+        .on('click', '#opHistory', function (e) {
+            // the backdrop or the × closes; clicks inside the box do not
+            if (e.target === this || $(e.target).closest('.op-modal-close').length) {
+                closeHistory();
+            }
+        })
+        .on('keydown', function (e) {
+            if (e.key === 'Escape') { closeHistory(); }
         });
 
     $(document).ready(init);
