@@ -36,7 +36,9 @@
 .op-eyebrow-red { color: #e5484d; }
 .op-sub { font-size: 11px; color: #888; margin: 0; }
 
-/* events */
+/* events: up to 150 a day, so the feed scrolls inside its card instead of
+   stretching the page past the receipts below */
+#opEvents { max-height: 600px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .op-event { display: grid; grid-template-columns: 70px 110px minmax(0, 1fr) 120px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 12px; }
 .op-event:last-child { border-bottom: 0; }
 .op-event-time { font-weight: 800; }
@@ -73,6 +75,27 @@
 .op-line strong.ok { color: #1fa766; }
 .op-line strong.bad { color: #e5484d; }
 
+/* delivery receipts by spot */
+.op-receipts-head { flex-wrap: wrap; }
+.op-filter { display: inline-flex; background: #f3f3f3; border-radius: 8px; padding: 3px; gap: 2px; }
+.op-filter-btn { border: 0; background: transparent; padding: 6px 11px; border-radius: 6px; font-size: 12px; font-weight: 700; color: #666; cursor: pointer; white-space: nowrap; }
+.op-filter-btn span { font-size: 10px; font-weight: 800; color: #999; margin-left: 2px; }
+.op-filter-btn.active { background: #fff; color: #111; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.op-filter-btn.active span { color: #111; }
+.op-rgroup { margin-top: 14px; }
+.op-rgroup-head { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; border-bottom: 2px solid #111; }
+.op-rgroup-head b { font-size: 14px; font-weight: 800; }
+.op-rgroup-head span { font-size: 11px; color: #888; font-weight: 700; }
+.op-receipt { display: grid; grid-template-columns: 80px 80px 80px 120px minmax(0, 1fr) 150px 80px; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+.op-receipt-labels { font-size: 9px; color: #888; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; padding: 6px 0; }
+.op-receipt-num { font-weight: 800; }
+.op-receipt-time { font-weight: 800; }
+.op-receipt-time.none, .op-receipt-courier.none { color: #bbb; font-weight: 700; }
+.op-receipt-desc b { display: block; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-receipt-desc span { color: #888; font-size: 10px; }
+.op-receipt-courier { font-weight: 700; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-receipt-sum { font-weight: 800; text-align: right; }
+
 @media (max-width: 1300px) {
     .op-grid { grid-template-columns: minmax(0, 1fr) 360px; }
     /* late orders stay top right; the side column moves under both */
@@ -86,4 +109,10 @@
     .op-card-late, .op-side { grid-column: auto; grid-row: auto; }
     .op-event { grid-template-columns: 58px 80px minmax(0, 1fr); }
     .op-event > div:last-child { display: none; }
+    /* number, accepted, closed, status / address, sum */
+    .op-receipt { grid-template-columns: 70px 60px 60px minmax(0, 1fr); row-gap: 4px; }
+    .op-receipt-labels { display: none; }
+    .op-receipt-desc { grid-column: 1 / 4; }
+    .op-receipt-courier { grid-column: 4; }
+    .op-receipt-sum { grid-column: 4; }
 }

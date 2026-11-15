@@ -6,6 +6,7 @@ use Backend\Classes\Controller;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Layerok\PosterPos\Classes\Couriers\CourierOrders;
 use Layerok\PosterPos\Classes\Delivery\OpenDeliveries;
 use Layerok\PosterPos\Models\City;
 use Layerok\PosterPos\Models\DeliveryEvent;
@@ -25,7 +26,8 @@ class Operators extends Controller
      */
     private const LATE_AFTER_MINUTES = 1;
 
-    private const EVENTS_LIMIT = 40;
+    // today's latest; the feed scrolls inside its card (operators.css)
+    private const EVENTS_LIMIT = 150;
 
     /**
      * Poster's processing_status for a delivery receipt.
@@ -82,6 +84,10 @@ class Operators extends Controller
             $transactions = $this->deliveries()->openTransactions($from, $to)
                 ->filter(fn($t) => in_array((int) ($t->spot_id ?? 0), $spotIds, true))
                 ->values();
+            // Today's closed receipts only: Poster files them under the close date.
+            $closed = $this->deliveries()->closedTransactions($to, $to)
+                ->filter(fn($t) => in_array((int) ($t->spot_id ?? 0), $spotIds, true))
+                ->values();
             $unaccepted = $this->deliveries()->unacceptedOrders($from, $to)
                 ->filter(fn($o) => in_array((int) ($o->spot_id ?? 0), $spotIds, true))
                 ->values();
@@ -90,7 +96,7 @@ class Operators extends Controller
             Log::error('Operator overview failed to load from Poster', ['error' => $e->getMessage()]);
 
             $error = $e->getMessage();
-            $transactions = $unaccepted = collect();
+            $transactions = $closed = $unaccepted = collect();
             $couriers = [];
         }
 
@@ -118,8 +124,80 @@ class Operators extends Controller
                 'unaccepted' => $unaccepted->count(),
                 'unaccepted_longest' => $this->longestWait($unaccepted, $now),
             ],
-            'events' => $this->events($spots, $couriers),
+            'events' => $this->events($spots, $couriers, $now),
+            'receipts' => $this->receiptsBySpot($transactions, $closed, $spots, $couriers, $now),
         ];
+    }
+
+    /**
+     * The day's delivery receipts grouped by spot, for the "Чеки доставки" card:
+     * open ones (from yesterday too, while still open) and the ones closed today.
+     * Each has when it was accepted (opened on the register) and closed, and a
+     * status the screen filters by: open, on_way (Poster's "в пути") or closed.
+     */
+    private function receiptsBySpot(Collection $open, Collection $closed, Collection $spots, array $couriers, Carbon $now): Collection
+    {
+        // A receipt closed between the two Poster calls comes in both; closed wins.
+        $receipts = collect()
+            ->merge($open->map(fn($t) => $this->receiptRow($t, false, $couriers, $now)))
+            ->merge($closed->map(fn($t) => $this->receiptRow($t, true, $couriers, $now)))
+            ->keyBy('id')
+            ->sortByDesc('accepted_sort')
+            ->values();
+
+        return $spots
+            ->map(fn(Spot $spot) => [
+                'id' => $spot->id,
+                'name' => $spot->name,
+                'receipts' => $receipts
+                    ->where('spot_poster_id', (int) $spot->poster_id)
+                    ->map(fn($row) => collect($row)->except(['accepted_sort', 'spot_poster_id'])->all())
+                    ->values(),
+            ])
+            ->values();
+    }
+
+    private function receiptRow(object $t, bool $isClosed, array $couriers, Carbon $now): array
+    {
+        $processing = (int) ($t->processing_status ?? 0);
+        $acceptedAt = OpenDeliveries::posterTime($t->date_start ?? null);
+        $closedAt = $isClosed
+            ? (OpenDeliveries::posterTime($t->date_close_date ?? null) ?? OpenDeliveries::posterTime($t->date_close ?? null))
+            : null;
+
+        if ($isClosed) {
+            $status = 'closed';
+            $label = 'закрыт';
+        } else {
+            $status = $processing === CourierOrders::IN_DELIVERY ? 'on_way' : 'open';
+            $label = self::PROCESSING_LABELS[$processing] ?? 'открыт';
+        }
+
+        return [
+            'id' => (string) $t->transaction_id,
+            'spot_poster_id' => (int) ($t->spot_id ?? 0),
+            'status' => $status,
+            'status_label' => $label,
+            'accepted' => $this->clock($acceptedAt, $now),
+            'closed' => $this->clock($closedAt, $now),
+            'accepted_sort' => $acceptedAt ? $acceptedAt->getTimestamp() : 0,
+            'address' => OpenDeliveries::addressOf($t),
+            'client' => OpenDeliveries::clientName($t->client_firstname ?? null, $t->client_lastname ?? null),
+            'courier' => OpenDeliveries::courierLabel(OpenDeliveries::courierIdOf($t), $couriers),
+            'amount' => OpenDeliveries::amountOf($t),
+        ];
+    }
+
+    /**
+     * "18:05" today, "13.11 23:40" for another day, null without a time.
+     */
+    private function clock(?Carbon $time, Carbon $now): ?string
+    {
+        if (!$time) {
+            return null;
+        }
+
+        return $time->isSameDay($now) ? $time->format('H:i') : $time->format('d.m H:i');
     }
 
     private function spotCard(Spot $spot, Collection $transactions, Collection $unaccepted, array $lateIds, Carbon $now): array
@@ -211,12 +289,16 @@ class Operators extends Controller
         return $oldest ? (int) $oldest->diffInMinutes($now) : null;
     }
 
-    private function events(Collection $spots, array $couriers): Collection
+    /**
+     * Today's events only (Kyiv day); happened_at is stored in UTC.
+     */
+    private function events(Collection $spots, array $couriers, Carbon $now): Collection
     {
         $names = $spots->mapWithKeys(fn(Spot $s) => [(int) $s->poster_id => $s->name]);
-        $today = OpenDeliveries::now();
+        $today = $now;
 
         return DeliveryEvent::whereIn('spot_poster_id', $names->keys()->all())
+            ->where('happened_at', '>=', $now->copy()->startOfDay()->setTimezone('UTC'))
             ->orderByDesc('happened_at')
             ->orderByDesc('id')
             ->limit(self::EVENTS_LIMIT)
