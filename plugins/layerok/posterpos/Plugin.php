@@ -121,6 +121,12 @@ class Plugin extends PluginBase
      */
     public function boot()
     {
+        // /api/addresses keeps the streets matched to delivery areas for 5 min
+        // (AddressCache); a changed street or area drops it at once.
+        foreach ([\Layerok\PosterPos\Models\Address::class, \Layerok\PosterPos\Models\Area::class] as $model) {
+            $model::saved(fn () => \Layerok\PosterPos\Classes\Delivery\AddressCache::flush());
+            $model::deleted(fn () => \Layerok\PosterPos\Classes\Delivery\AddressCache::flush());
+        }
 
         Product::deleted(function ($model) {
             $model->poster_accounts()->sync([]);

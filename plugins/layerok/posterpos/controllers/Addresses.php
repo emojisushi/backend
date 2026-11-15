@@ -5,6 +5,7 @@ namespace Layerok\PosterPos\Controllers;
 use BackendMenu;
 use Backend\Classes\Controller;
 use Illuminate\Http\JsonResponse;
+use Layerok\PosterPos\Classes\Delivery\AddressCache;
 use Layerok\PosterPos\Classes\SpotStockService;
 use Layerok\PosterPos\Models\AddressSettings;
 use Layerok\PosterPos\Models\Spot;
@@ -140,6 +141,8 @@ class Addresses extends Controller
             'suburb_ua' => $suburbUa,
             'suburb_ru' => $suburbRu
         ]);
+        // a bulk query fires no model events
+        AddressCache::flush();
 
         return [
             'message' => count($ids) . ' addresses updated'
@@ -214,6 +217,8 @@ class Addresses extends Controller
         $id = post('id');
         if ($id) {
             \Layerok\PosterPos\Models\Area::where('id', $id)->delete();
+            // a query delete fires no model events
+            AddressCache::flush();
         }
         return ['status' => 'deleted'];
     }
@@ -254,6 +259,7 @@ class Addresses extends Controller
             return ['addresses' => []];
         }
 
+        // Live, per spot: stop lists, sold-out limited products, wait time. Cheap.
         $spots = Spot::with('unavailable_categories', 'unavailable_products', 'recommended_products')
             ->where('city_id', $city->id)
             ->get();
@@ -280,9 +286,51 @@ class Addresses extends Controller
 
         $availableSpotIds = $spots
             // ->where('temporarily_unavailable', false) // показывать улицу даже если спот закрыт
-            ->pluck('id');
+            ->pluck('id')
+            ->all();
 
-        $areas = \Layerok\PosterPos\Models\Area::whereIn('spot_id', $availableSpotIds)
+        // The heavy part — every street against every area polygon — is cached.
+        $streets = AddressCache::remember(
+            (int) $city->id,
+            fn () => $this->streetsInAreas($availableSpotIds)
+        );
+
+        $result = array_map(function (array $street) use ($spotMap) {
+            $spot = $spotMap[$street['spot_id']] ?? [];
+
+            return [
+                'id' => $street['id'],
+                'name_ua' => $street['name_ua'],
+                'name_ru' => $street['name_ru'],
+                'suburb_ua' => $street['suburb_ua'],
+                'suburb_ru' => $street['suburb_ru'],
+                'buildings' => $street['buildings'],
+                'spot_name' => $spot['name'] ?? null,
+                'min_amount' => $street['min_amount'],
+                'delivery_price' => $street['delivery_price'],
+                'min' => $street['min'],
+                'unavailable_categories' => $spot['unavailable_categories'] ?? null,
+                'unavailable_products' => $spot['unavailable_products'] ?? null,
+                'recommended_products' => $spot['recommended_products'] ?? null,
+                'limited_products' => $spot['limited_products'] ?? null,
+                'wait_minutes_delivery' => ($spot['wait_minutes_delivery'] ?? 0) + ($street['delivery_minutes'] ?? 0),
+            ];
+        }, $streets);
+
+        // HIT: the streets came from the 5-minute cache; MISS: matched just now
+        return response()
+            ->json(['addresses' => $result])
+            ->header('X-Address-Cache', AddressCache::status() ?? 'MISS');
+    }
+
+    /**
+     * Each street that lies in a delivery area of these spots, with that area's
+     * terms (the first matching area wins). Streets outside every area are left
+     * out. Plain arrays only: this is what AddressCache keeps.
+     */
+    private function streetsInAreas(array $spotIds): array
+    {
+        $areas = \Layerok\PosterPos\Models\Area::whereIn('spot_id', $spotIds)
             ->get()
             ->map(function ($area) {
                 return [
@@ -306,64 +354,38 @@ class Addresses extends Controller
             'lat',
         ]);
 
-        $result = $addresses->map(function ($address) use ($areas, $spotMap) {
-            $spotId = null;
-            $spotName = null;
-            $unavailableCategories = null;
-            $unavailableProducts = null;
-            $recommendedProducts = null;
-            $limitedProducts = null;
-            $min_amount = null;
-            $delivery_price = null;
-            $min = null;
-            $wait_minutes_delivery = 0;
+        $streets = [];
+
+        foreach ($addresses as $address) {
             foreach ($areas as $area) {
-                if ($this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
-                    $min_amount = $area['min_amount'];
-                    $delivery_price = $area['delivery_price'];
-                    $spotId = $area['spot_id'];
-                    $spotName = $spotMap[$spotId]['name'] ?? null;
-                    $unavailableCategories = $spotMap[$spotId]['unavailable_categories'] ?? null;
-                    $unavailableProducts = $spotMap[$spotId]['unavailable_products'] ?? null;
-                    $recommendedProducts = $spotMap[$spotId]['recommended_products'] ?? null;
-                    $limitedProducts = $spotMap[$spotId]['limited_products'] ?? null;
-                    $wait_minutes_delivery += $spotMap[$spotId]['wait_minutes_delivery'] ?? 0;
-                    $wait_minutes_delivery += $area['delivery_minutes'] ?? 0;
-
-                    $min = $area['min'];
-                    break;
+                if (!$this->pointInPolygon($address->lat, $address->lon, $area['coords'])) {
+                    continue;
                 }
+
+                $streets[] = [
+                    'id' => $address->Id,
+                    'name_ua' => $address->name_ua,
+                    'name_ru' => $address->name_ru,
+                    'suburb_ua' => $address->suburb_ua,
+                    'suburb_ru' => $address->suburb_ru,
+                    'buildings' => !empty($address->buildings)
+                        ? array_map(
+                            'trim', // remove spaces
+                            explode(',', $address->buildings)
+                        )
+                        : [],
+                    'spot_id' => $area['spot_id'],
+                    'min_amount' => $area['min_amount'],
+                    'delivery_price' => $area['delivery_price'],
+                    'min' => $area['min'],
+                    'delivery_minutes' => $area['delivery_minutes'],
+                ];
+
+                break;
             }
+        }
 
-            if (!$spotId) {
-                return null;
-            }
-
-            return [
-                'id' => $address->Id,
-                'name_ua' => $address->name_ua,
-                'name_ru' => $address->name_ru,
-                'suburb_ua' => $address->suburb_ua,
-                'suburb_ru' => $address->suburb_ru,
-                'buildings' => !empty($address->buildings)
-                    ? array_map(
-                        'trim', // remove spaces
-                        explode(',', $address->buildings)
-                    )
-                    : [],
-                'spot_name' => $spotName,
-                'min_amount' => $min_amount,
-                'delivery_price' => $delivery_price,
-                'min' => $min,
-                'unavailable_categories' => $unavailableCategories,
-                'unavailable_products' => $unavailableProducts,
-                'recommended_products' => $recommendedProducts,
-                'limited_products' => $limitedProducts,
-                'wait_minutes_delivery' => $wait_minutes_delivery
-            ];
-        })->filter();
-
-        return ['addresses' => $result->values()];
+        return $streets;
     }
     private function pointInPolygon($x, $y, $poly)
     {

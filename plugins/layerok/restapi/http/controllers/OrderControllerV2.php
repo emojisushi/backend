@@ -266,7 +266,11 @@ class OrderControllerV2 extends Controller
         $orderType = $shippingMethod->code === ShippingMethodCode::COURIER
             ? PosterPromotion::ORDER_TYPES_COURIER
             : PosterPromotion::ORDER_TYPES_TAKEAWAY;
-        $appliedPromotions = $this->applyPosterPromotions($poster_account, $spot, $promotionLines, $orderType);
+        // When both a gift and a discount apply, the gift wins — unless a call
+        // centre operator chose the discount for this order. Nobody else can.
+        $preferDiscount = ($data['promotion_choice'] ?? null) === 'discount'
+            && $user && $user->isCallCenterAdmin();
+        $appliedPromotions = $this->applyPosterPromotions($poster_account, $spot, $promotionLines, $orderType, $preferDiscount);
 
         if ($appliedPromotions === null) {
             $appliedPromotions = [];
@@ -365,6 +369,19 @@ class OrderControllerV2 extends Controller
             }
 
             if ($usedBonus > 0) {
+                // Points and a discount promotion do not combine: with 10% off
+                // takeaway the client pays the discounted sum in money only.
+                $discounts = PosterPromotionService::discounts($appliedPromotions);
+
+                if ($discounts) {
+                    return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [
+                        trans('layerok.restapi::validation.bonus_with_discount', [
+                            'name' => trim($discounts[0]['name']),
+                            'percent' => $discounts[0]['percent'],
+                        ]),
+                    ]]], 400);
+                }
+
                 $bonusClientId = $bonusService->findClientId($bonusPhone);
 
                 if ($usedBonus > $bonusService->posterBalance($bonusClientId)) {
@@ -1030,10 +1047,10 @@ class OrderControllerV2 extends Controller
      * gets no gift, which the operator can still add on the register. Null when
      * the promotions could not be worked out at all.
      */
-    private function applyPosterPromotions(PosterAccount $account, Spot $spot, array $lines, string $orderType): ?array
+    private function applyPosterPromotions(PosterAccount $account, Spot $spot, array $lines, string $orderType, bool $preferDiscount = false): ?array
     {
         try {
-            return (new PosterPromotionService())->applyToOrder($account, $spot, $lines, $orderType);
+            return (new PosterPromotionService())->applyToOrder($account, $spot, $lines, $orderType, $preferDiscount);
         } catch (\Throwable $e) {
             \Log::error('Poster promotions were not applied: ' . $e->getMessage());
 

@@ -14,7 +14,7 @@ return [
 
     // Readable from JS on the city subdomains (cross-origin), e.g.
     // response.headers['x-catalog-cache'] in axios.
-    'exposed_headers' => ['X-Catalog-Cache'],
+    'exposed_headers' => ['X-Catalog-Cache', 'X-Address-Cache'],
 
     'max_age' => 0,
 
