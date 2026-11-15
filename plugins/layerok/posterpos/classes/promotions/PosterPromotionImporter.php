@@ -104,17 +104,18 @@ class PosterPromotionImporter
     }
 
     /**
-     * Works out from the whole Poster menu, for each supported promotion of the
-     * account:
-     *  - gift: the products that count towards it, those whose Poster category is
-     *    the promotion's category. Only that exact category — a subcategory would
-     *    pull in e.g. «Комбо Набори», which is under «Роли» on prod.
-     *  - discount: the products Poster gives no discount on («без скидок» on the
-     *    product or on its category).
+     * Works out from the whole Poster menu, for each supported gift promotion of
+     * the account, the products that count towards it: those whose Poster
+     * category is the promotion's category. Only that exact category — a
+     * subcategory would pull in e.g. «Комбо Набори», which is under «Роли» on prod.
+     *
+     * A discount needs no product list: it applies to the whole cart, «без скидок»
+     * products included, as Poster applies its promotions.
      */
     public function refreshQualifying(PosterAccount $account): void
     {
-        $promotions = $this->implementedPromotions($account);
+        $promotions = $this->implementedPromotions($account)
+            ->filter(fn(PosterPromotion $promotion) => $promotion->isGift());
 
         if ($promotions->isEmpty()) {
             return;
@@ -122,45 +123,18 @@ class PosterPromotionImporter
 
         $this->init($account);
         $products = $this->request('menu.getProducts');
-        $nodiscountCategories = [];
-
-        if ($promotions->contains(fn(PosterPromotion $promotion) => $promotion->isDiscount())) {
-            foreach ($this->request('menu.getCategories') as $category) {
-                if ((int) ($category->nodiscount ?? 0) === 1) {
-                    $nodiscountCategories[] = (int) $category->category_id;
-                }
-            }
-            sort($nodiscountCategories);
-        }
-
         $byCategory = [];
-        $nodiscountProducts = [];
 
         foreach ($products as $product) {
-            $categoryId = (int) ($product->menu_category_id ?? 0);
-            $byCategory[$categoryId][] = (int) $product->product_id;
-
-            if ((int) ($product->nodiscount ?? 0) === 1 || in_array($categoryId, $nodiscountCategories, true)) {
-                $nodiscountProducts[] = (int) $product->product_id;
-            }
+            $byCategory[(int) ($product->menu_category_id ?? 0)][] = (int) $product->product_id;
         }
 
-        sort($nodiscountProducts);
-
         foreach ($promotions as $promotion) {
-            if ($promotion->isDiscount()) {
-                $promotion->qualifying = [
-                    'nodiscount_category_ids' => $nodiscountCategories,
-                    'nodiscount_product_ids' => $nodiscountProducts,
-                ];
-            } else {
-                $categoryId = $promotion->giftRule()->categoryPosterId;
-                $productIds = $byCategory[$categoryId] ?? [];
-                sort($productIds);
+            $categoryId = $promotion->giftRule()->categoryPosterId;
+            $productIds = $byCategory[$categoryId] ?? [];
+            sort($productIds);
 
-                $promotion->qualifying = ['category_id' => $categoryId, 'product_ids' => $productIds];
-            }
-
+            $promotion->qualifying = ['category_id' => $categoryId, 'product_ids' => $productIds];
             $promotion->save();
         }
     }
@@ -183,15 +157,15 @@ class PosterPromotionImporter
             return;
         }
 
+        // Only gifts keep a product list; a discount covers the whole cart.
         $promotions = $this->implementedPromotions($account)
-            ->filter(fn(PosterPromotion $promotion) => $promotion->hasQualifyingProducts());
+            ->filter(fn(PosterPromotion $promotion) => $promotion->isGift() && $promotion->hasQualifyingProducts());
 
         if ($promotions->isEmpty()) {
             return;
         }
 
         $categoryId = null;
-        $productNodiscount = false;
 
         if ($action !== 'removed') {
             $this->init($account);
@@ -203,22 +177,12 @@ class PosterPromotionImporter
             }
 
             $categoryId = (int) ($product->menu_category_id ?? 0);
-            $productNodiscount = (int) ($product->nodiscount ?? 0) === 1;
         }
 
         foreach ($promotions as $promotion) {
             $qualifying = (array) $promotion->qualifying;
-
-            if ($promotion->isDiscount()) {
-                // A removed product no longer matters; otherwise it is excluded if
-                // it or (as stored on import) its category is «без скидок».
-                $key = 'nodiscount_product_ids';
-                $listed = $categoryId !== null && ($productNodiscount
-                    || in_array($categoryId, array_map('intval', (array) ($qualifying['nodiscount_category_ids'] ?? [])), true));
-            } else {
-                $key = 'product_ids';
-                $listed = $categoryId !== null && $categoryId === $promotion->giftRule()->categoryPosterId;
-            }
+            $key = 'product_ids';
+            $listed = $categoryId !== null && $categoryId === $promotion->giftRule()->categoryPosterId;
 
             $ids = array_values(array_map('intval', (array) ($qualifying[$key] ?? [])));
             sort($ids);

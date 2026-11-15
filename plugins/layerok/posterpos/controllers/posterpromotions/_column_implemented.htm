@@ -24,16 +24,11 @@
 <?php elseif ($reason === null && $record->isDiscount()): ?>
     <span class="text-success">Да — скидка <?= (int) $record->discountRule()->percent ?>%</span>
     <div class="text-muted" style="font-size: 12px;">
-        На весь заказ<?= $record->discountRule()->minSum > 0 ? ' от ' . e(rtrim(rtrim(number_format($record->discountRule()->minSum / 100, 2, '.', ''), '0'), '.')) . ' ₴' : '' ?>, кроме товаров «без скидок» в Poster.
+        На весь заказ<?= $record->discountRule()->minSum > 0 ? ' от ' . e(rtrim(rtrim(number_format($record->discountRule()->minSum / 100, 2, '.', ''), '0'), '.')) . ' ₴' : '' ?>, включая товары «без скидок» в Poster.
         Заказы: <?= e($record->order_types_label) ?>.
     </div>
     <?php if (!$record->orderTypes()): ?>
         <div class="text-warning" style="font-size: 12px;">В Poster не указано, для каких заказов эта скидка — выберите на странице акции, иначе её нельзя включить</div>
-    <?php endif ?>
-    <?php if ($record->hasQualifyingProducts()): ?>
-        <div class="text-muted" style="font-size: 12px;">Без скидки в Poster: <?= count($record->nodiscountPosterProductIds()) ?> шт.</div>
-    <?php else: ?>
-        <div class="text-warning" style="font-size: 12px;">Список товаров «без скидок» не загружен — нажмите «Импортировать из Poster»</div>
     <?php endif ?>
 <?php else: ?>
     <span class="text-muted">Нет</span>

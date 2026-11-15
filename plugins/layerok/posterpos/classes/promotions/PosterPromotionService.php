@@ -126,20 +126,19 @@ class PosterPromotionService
     }
 
     /**
-     * The discount entry for these lines, or null when nothing in the order can be
-     * discounted. Products «без скидок» in Poster are left out, as on Poster's bill.
+     * The discount entry for these lines, or null when there is nothing to discount.
+     * It covers the whole cart: Poster applies its promotions to «без скидок»
+     * products too (checked on prod), so none are left out.
      */
     private function discountFor(PosterPromotion $promotion, array $lines): ?array
     {
         $rule = $promotion->discountRule();
 
-        if (!$rule || !$promotion->hasQualifyingProducts()) {
+        if (!$rule) {
             return null;
         }
 
-        $excluded = array_flip($promotion->nodiscountPosterProductIds());
         $involved = [];
-        $sum = 0;
         $orderSum = 0;
 
         foreach ($lines as $line) {
@@ -150,14 +149,8 @@ class PosterPromotionService
                 continue;
             }
 
-            $orderSum += (int) ($line['price'] ?? 0) * $quantity;
-
-            if (isset($excluded[$posterId])) {
-                continue;
-            }
-
             $involved[] = ['id' => $posterId, 'count' => $quantity];
-            $sum += (int) ($line['price'] ?? 0) * $quantity;
+            $orderSum += (int) ($line['price'] ?? 0) * $quantity;
         }
 
         // Poster's "order sum from" condition, on the whole order
@@ -165,7 +158,7 @@ class PosterPromotionService
             return null;
         }
 
-        $discount = $rule->discountOn($sum);
+        $discount = $rule->discountOn($orderSum);
 
         if ($discount < 1) {
             return null;

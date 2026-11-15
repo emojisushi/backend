@@ -75,8 +75,9 @@ class PromotionController extends Controller
                         'percent' => $promotion->discountRule()->percent,
                         // the order sum (kopecks) it starts from, 0 for any order
                         'min_sum' => $promotion->discountRule()->minSum,
-                        // our ids of the products Poster gives no discount on
-                        'nodiscount_product_ids' => $service->localProductIds($account, $promotion->nodiscountPosterProductIds()),
+                        // The discount covers the whole cart. Kept, always empty,
+                        // for site builds still cached that filter by it.
+                        'nodiscount_product_ids' => [],
                     ];
                 }
 
