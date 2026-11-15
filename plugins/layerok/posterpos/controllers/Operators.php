@@ -295,7 +295,6 @@ class Operators extends Controller
     private function events(Collection $spots, array $couriers, Carbon $now): Collection
     {
         $names = $spots->mapWithKeys(fn(Spot $s) => [(int) $s->poster_id => $s->name]);
-        $today = $now;
 
         return DeliveryEvent::whereIn('spot_poster_id', $names->keys()->all())
             ->where('happened_at', '>=', $now->copy()->startOfDay()->setTimezone('UTC'))
@@ -303,16 +302,127 @@ class Operators extends Controller
             ->orderByDesc('id')
             ->limit(self::EVENTS_LIMIT)
             ->get()
-            ->map(function (DeliveryEvent $event) use ($names, $couriers, $today) {
-                $at = $event->happened_at->copy()->setTimezone(OpenDeliveries::TIMEZONE);
-
-                return [
-                    'id' => $event->id,
-                    'time' => $at->isSameDay($today) ? $at->format('H:i') : $at->format('d.m H:i'),
-                    'spot' => $names[(int) $event->spot_poster_id] ?? '',
-                ] + $this->describe($event, $couriers);
-            })
+            ->map(fn(DeliveryEvent $event) => $this->eventRow($event, $names, $couriers, $now))
             ->values();
+    }
+
+    /**
+     * One feed line. The ids let the screen open the order's history on click.
+     */
+    private function eventRow(DeliveryEvent $event, Collection $names, array $couriers, Carbon $now): array
+    {
+        $at = $event->happened_at->copy()->setTimezone(OpenDeliveries::TIMEZONE);
+
+        return [
+            'id' => $event->id,
+            'time' => $at->isSameDay($now) ? $at->format('H:i') : $at->format('d.m H:i'),
+            'spot' => $names[(int) $event->spot_poster_id] ?? '',
+            'transaction_id' => $event->transaction_id ? (string) $event->transaction_id : null,
+            'incoming_order_id' => $event->incoming_order_id ? (string) $event->incoming_order_id : null,
+        ] + $this->describe($event, $couriers);
+    }
+
+    /**
+     * The whole story of one order for the history window: every recorded event
+     * of the receipt and of the online order it was accepted from (linked by the
+     * "accepted" event), oldest first, plus the receipt as Poster has it now.
+     * Opened from a receipt (transaction_id) or from an event, which may be an
+     * online order not accepted yet (incoming_order_id only).
+     */
+    public function onLoadOrderHistory()
+    {
+        $transactionId = (int) post('transaction_id') ?: null;
+        $incomingId = (int) post('incoming_order_id') ?: null;
+
+        if (!$transactionId && !$incomingId) {
+            return ['error' => 'Заказ не указан'];
+        }
+
+        if (!$transactionId) {
+            $transactionId = (int) DeliveryEvent::where('incoming_order_id', $incomingId)
+                ->whereNotNull('transaction_id')
+                ->value('transaction_id') ?: null;
+        }
+
+        $incomingIds = collect([$incomingId]);
+
+        if ($transactionId) {
+            $incomingIds = $incomingIds->merge(
+                DeliveryEvent::where('transaction_id', $transactionId)
+                    ->whereNotNull('incoming_order_id')
+                    ->pluck('incoming_order_id')
+            );
+        }
+
+        $incomingIds = $incomingIds->filter()->map(fn($id) => (int) $id)->unique()->values();
+
+        $now = OpenDeliveries::now();
+        $couriers = $this->deliveries()->courierNames();
+        $names = Spot::whereNotNull('poster_id')->pluck('name', 'poster_id')
+            ->mapWithKeys(fn($name, $posterId) => [(int) $posterId => $name]);
+
+        $events = DeliveryEvent::where(function ($query) use ($transactionId, $incomingIds) {
+            if ($transactionId) {
+                $query->orWhere('transaction_id', $transactionId);
+            }
+
+            if ($incomingIds->isNotEmpty()) {
+                $query->orWhereIn('incoming_order_id', $incomingIds->all());
+            }
+        })
+            ->orderBy('happened_at')
+            ->orderBy('id')
+            ->limit(self::EVENTS_LIMIT)
+            ->get()
+            ->map(fn(DeliveryEvent $event) => $this->eventRow($event, $names, $couriers, $now))
+            ->values();
+
+        $receipt = null;
+        $error = null;
+
+        if ($transactionId) {
+            try {
+                $transaction = $this->deliveries()->transaction($transactionId);
+
+                if ($transaction) {
+                    $receipt = $this->historyReceipt($transaction, $names, $couriers, $now);
+                }
+            } catch (\Throwable $e) {
+                $error = 'Poster недоступен: ' . $e->getMessage();
+            }
+        }
+
+        return [
+            'error' => $error,
+            'title' => $transactionId
+                ? 'Чек #' . $transactionId
+                : 'Онлайн-заказ #' . $incomingIds->first(),
+            'receipt' => $receipt,
+            'events' => $events,
+        ];
+    }
+
+    /**
+     * The receipt's header in the history window, as Poster has it right now.
+     */
+    private function historyReceipt(object $t, Collection $names, array $couriers, Carbon $now): array
+    {
+        // dash.getTransaction status: 1 open, 2 closed, 3 removed, 4 canceled
+        $status = (int) ($t->status ?? 1);
+        $row = $this->receiptRow($t, $status === OpenDeliveries::STATUS_CLOSED, $couriers, $now);
+
+        if ($status === 3 || $status === 4) {
+            $row['status'] = 'removed';
+            $row['status_label'] = $status === 4 ? 'отменён' : 'удалён';
+        }
+
+        $due = OpenDeliveries::dueAt($t);
+
+        return collect($row)->except(['accepted_sort', 'spot_poster_id'])->all() + [
+            'spot' => $names[(int) ($t->spot_id ?? 0)] ?? '',
+            'phone' => (string) ($t->client_phone ?? ''),
+            'due' => $this->clock($due, $now),
+        ];
     }
 
     /**
