@@ -39,15 +39,18 @@ class PosterPromotionService
      * Promotions the order qualifies for. Promotions do not combine, and a gift
      * comes first: a takeaway order with two pizzas gets the free pizza (2+1) and
      * not the 10% off. The discount (at most one can be enabled per order type, see
-     * PosterPromotion::enableProblem) applies only when there is no gift.
+     * PosterPromotion::enableProblem) applies only when there is no gift — or when
+     * $preferDiscount asks for it, if it applies; otherwise the gifts stay.
      *
      * @param array $lines [['product' => Product, 'quantity' => int, 'poster_id' => int, 'price' => int kopecks], ...]
      * @param string $orderType PosterPromotion::ORDER_TYPES_TAKEAWAY or ORDER_TYPES_COURIER
+     * @param bool $preferDiscount the discount instead of the gift when both apply;
+     *   only a call centre operator may choose it (OrderControllerV2)
      * @return array[] each with 'kind' => 'gift' | 'discount', 'promotion_id', 'poster' (the Poster
      *   `promotion` entry) and 'name'; a gift adds 'gift_name', 'gift_count', a discount
      *   adds 'percent', 'discount' (kopecks)
      */
-    public function applyToOrder(PosterAccount $account, Spot $spot, array $lines, string $orderType): array
+    public function applyToOrder(PosterAccount $account, Spot $spot, array $lines, string $orderType, bool $preferDiscount = false): array
     {
         $applied = [];
         $promotions = $this->runningFor($account, $spot)
@@ -109,8 +112,9 @@ class PosterPromotionService
             ];
         }
 
-        // only one kind of promotion per order, and gifts come first
-        if ($applied) {
+        // Only one kind of promotion per order: the gifts, unless the discount was
+        // chosen and applies.
+        if ($applied && !$preferDiscount) {
             return $applied;
         }
 
@@ -122,7 +126,7 @@ class PosterPromotionService
             }
         }
 
-        return [];
+        return $applied;
     }
 
     /**
