@@ -70,7 +70,8 @@ class PosterPromotion extends Model
 
     // gift: Poster snapshot of the gift product, see PosterPromotionImporter::snapshot()
     // qualifying, in Poster ids, see PosterPromotionImporter:
-    //   gift: {category_id, product_ids}; discount: {nodiscount_category_ids, nodiscount_product_ids}
+    //   gift: {category_id, product_ids}; a discount has none (it covers the whole
+    //   cart); an old import may have left {nodiscount_*} there, which is unused
     // active_days: ISO week days the promotion applies on, [] for every day
     protected $jsonable = ['params', 'gift', 'qualifying', 'active_days'];
 
@@ -225,15 +226,6 @@ class PosterPromotion extends Model
     }
 
     /**
-     * Poster product ids that get no discount (marked «без скидок» in Poster, on the
-     * product or its category). Only for a discount; see PosterPromotionImporter.
-     */
-    public function nodiscountPosterProductIds(): array
-    {
-        return array_values(array_map('intval', (array) (((array) $this->qualifying)['nodiscount_product_ids'] ?? [])));
-    }
-
-    /**
      * Poster's own schedule (dates, week days, periods) and ours (days and time).
      */
     public function isRunningAt(\DateTimeInterface $now): bool
@@ -363,16 +355,12 @@ class PosterPromotion extends Model
     }
 
     /**
-     * Whether the import has worked out its products: the qualifying ones for a
-     * gift, the ones excluded from the discount for a discount.
+     * Whether the import has worked out the gift's qualifying products. A discount
+     * covers the whole cart and needs no list, so it always has them.
      */
     public function hasQualifyingProducts(): bool
     {
-        $qualifying = (array) $this->qualifying;
-
-        return $this->isDiscount()
-            ? isset($qualifying['nodiscount_product_ids'])
-            : isset($qualifying['product_ids']);
+        return $this->isDiscount() || isset(((array) $this->qualifying)['product_ids']);
     }
 
     public function giftName(): ?string

@@ -16,8 +16,8 @@ namespace Layerok\PosterPos\Classes\Promotions;
  * orders such a promotion is for is therefore never guessed: it is chosen in the
  * backend (PosterPromotion::$order_types), and it cannot be enabled before that.
  *
- * Products marked «без скидок» in Poster (nodiscount, on the product or its
- * category) get no discount, as on Poster's own bill.
+ * It covers the whole cart: Poster applies promotions to products marked «без
+ * скидок» (nodiscount) as well, so they are discounted too.
  *
  * Has no framework dependencies so it can be checked without booting October.
  */
