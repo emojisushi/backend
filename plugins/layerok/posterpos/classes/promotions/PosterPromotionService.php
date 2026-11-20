@@ -44,8 +44,8 @@ class PosterPromotionService
      *
      * @param array $lines [['product' => Product, 'quantity' => int, 'poster_id' => int, 'price' => int kopecks], ...]
      * @param string $orderType PosterPromotion::ORDER_TYPES_TAKEAWAY or ORDER_TYPES_COURIER
-     * @param bool $preferDiscount the discount instead of the gift when both apply;
-     *   only a call centre operator may choose it (OrderControllerV2)
+     * @param bool $preferDiscount the discount instead of the gift when both apply,
+     *   as the client chose at checkout (promotion_choice, OrderControllerV2)
      * @return array[] each with 'kind' => 'gift' | 'discount', 'promotion_id', 'poster' (the Poster
      *   `promotion` entry) and 'name'; a gift adds 'gift_name', 'gift_count', a discount
      *   adds 'percent', 'discount' (kopecks)

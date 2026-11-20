@@ -86,7 +86,9 @@
 .op-rgroup-head { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; border-bottom: 2px solid #111; }
 .op-rgroup-head b { font-size: 14px; font-weight: 800; }
 .op-rgroup-head span { font-size: 11px; color: #888; font-weight: 700; }
-.op-receipt { display: grid; grid-template-columns: 80px 80px 80px 120px minmax(0, 1fr) 150px 80px; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+/* number, accepted, due, closed, status, address · client, courier, sum */
+.op-receipt { display: grid; grid-template-columns: 80px 80px 90px 80px 120px minmax(0, 1fr) 150px 80px; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+.op-receipt-time.late { color: #e5484d; }
 .op-receipt-labels { font-size: 9px; color: #888; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; padding: 6px 0; }
 .op-receipt-num { font-weight: 800; }
 .op-receipt-time { font-weight: 800; }
@@ -127,11 +129,11 @@
     .op-card-late, .op-side { grid-column: auto; grid-row: auto; }
     .op-event { grid-template-columns: 58px 80px minmax(0, 1fr); }
     .op-event > div:last-child { display: none; }
-    /* number, accepted, closed, status / address, sum */
-    .op-receipt { grid-template-columns: 70px 60px 60px minmax(0, 1fr); row-gap: 4px; }
+    /* number, accepted, due, closed, status / address, courier / sum */
+    .op-receipt { grid-template-columns: 70px 50px 60px 50px minmax(0, 1fr); row-gap: 4px; }
     .op-receipt-labels { display: none; }
-    .op-receipt-desc { grid-column: 1 / 4; }
-    .op-receipt-courier { grid-column: 4; }
-    .op-receipt-sum { grid-column: 4; }
+    .op-receipt-desc { grid-column: 1 / 5; }
+    .op-receipt-courier { grid-column: 5; }
+    .op-receipt-sum { grid-column: 5; }
     .op-history-facts { grid-template-columns: 1fr 1fr; }
 }
