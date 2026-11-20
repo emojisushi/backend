@@ -173,12 +173,17 @@ class Operators extends Controller
             $label = self::PROCESSING_LABELS[$processing] ?? 'открыт';
         }
 
+        // the promised time; still open past it counts as late, as in «Просроченные»
+        $due = OpenDeliveries::dueAt($t);
+
         return [
             'id' => (string) $t->transaction_id,
             'spot_poster_id' => (int) ($t->spot_id ?? 0),
             'status' => $status,
             'status_label' => $label,
             'accepted' => $this->clock($acceptedAt, $now),
+            'due' => $this->clock($due, $now),
+            'late' => !$isClosed && $due && $now->gte($due->copy()->addMinutes(self::LATE_AFTER_MINUTES)),
             'closed' => $this->clock($closedAt, $now),
             'accepted_sort' => $acceptedAt ? $acceptedAt->getTimestamp() : 0,
             'address' => OpenDeliveries::addressOf($t),
@@ -416,12 +421,14 @@ class Operators extends Controller
             $row['status_label'] = $status === 4 ? 'отменён' : 'удалён';
         }
 
-        $due = OpenDeliveries::dueAt($t);
+        // a removed or canceled receipt is not late, whatever its promised time
+        if ($row['status'] === 'removed') {
+            $row['late'] = false;
+        }
 
         return collect($row)->except(['accepted_sort', 'spot_poster_id'])->all() + [
             'spot' => $names[(int) ($t->spot_id ?? 0)] ?? '',
             'phone' => (string) ($t->client_phone ?? ''),
-            'due' => $this->clock($due, $now),
         ];
     }
 

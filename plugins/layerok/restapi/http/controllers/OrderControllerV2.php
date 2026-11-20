@@ -266,10 +266,9 @@ class OrderControllerV2 extends Controller
         $orderType = $shippingMethod->code === ShippingMethodCode::COURIER
             ? PosterPromotion::ORDER_TYPES_COURIER
             : PosterPromotion::ORDER_TYPES_TAKEAWAY;
-        // When both a gift and a discount apply, the gift wins — unless a call
-        // centre operator chose the discount for this order. Nobody else can.
-        $preferDiscount = ($data['promotion_choice'] ?? null) === 'discount'
-            && $user && $user->isCallCenterAdmin();
+        // When both a gift and a discount apply, the client (or the call centre)
+        // picks one; without a choice — e.g. the mobile app — the gift wins.
+        $preferDiscount = ($data['promotion_choice'] ?? null) === 'discount';
         $appliedPromotions = $this->applyPosterPromotions($poster_account, $spot, $promotionLines, $orderType, $preferDiscount);
 
         if ($appliedPromotions === null) {
@@ -369,15 +368,12 @@ class OrderControllerV2 extends Controller
             }
 
             if ($usedBonus > 0) {
-                // Points and a discount promotion do not combine: with 10% off
-                // takeaway the client pays the discounted sum in money only.
-                $discounts = PosterPromotionService::discounts($appliedPromotions);
-
-                if ($discounts) {
+                // Points do not combine with any Poster promotion: neither with a
+                // discount (10% off takeaway) nor with a gift (2+1 pizza).
+                if ($appliedPromotions) {
                     return response()->json(['message' => 'Error', 'errors' => ['bonusesToUse' => [
-                        trans('layerok.restapi::validation.bonus_with_discount', [
-                            'name' => trim($discounts[0]['name']),
-                            'percent' => $discounts[0]['percent'],
+                        trans('layerok.restapi::validation.bonus_with_promotion', [
+                            'name' => trim((string) $appliedPromotions[0]['name']),
                         ]),
                     ]]], 400);
                 }

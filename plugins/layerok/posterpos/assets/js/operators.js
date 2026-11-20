@@ -288,12 +288,15 @@
             return '<div class="op-rgroup">' +
                 '<div class="op-rgroup-head"><b>' + escapeHtml(g.name) + '</b><span>' + g.receipts.length + ' ' + plural(g.receipts.length, 'чек', 'чека', 'чеков') + '</span></div>' +
                 '<div class="op-receipt op-receipt-labels">' +
-                    '<span>Чек</span><span>Принят</span><span>Закрыт</span><span>Статус</span><span>Адрес · клиент</span><span>Курьер</span><span>Сумма</span>' +
+                    '<span>Чек</span><span>Принят</span><span>Доставить до</span><span>Закрыт</span><span>Статус</span><span>Адрес · клиент</span><span>Курьер</span><span>Сумма</span>' +
                 '</div>' +
                 g.receipts.map(function (r) {
                     return '<div class="op-receipt op-clickable"' + orderAttrs(r.id, null) + '>' +
                         '<span class="op-receipt-num">#' + escapeHtml(r.id) + '</span>' +
                         '<span class="op-receipt-time">' + escapeHtml(r.accepted || '—') + '</span>' +
+                        // red while the receipt is still open past its promised time
+                        '<span class="op-receipt-time' + (r.due ? (r.late ? ' late' : '') : ' none') + '"' +
+                            (r.late ? ' title="Просрочен"' : '') + '>' + escapeHtml(r.due || '—') + '</span>' +
                         '<span class="op-receipt-time' + (r.closed ? '' : ' none') + '">' + escapeHtml(r.closed || '—') + '</span>' +
                         '<span><span class="op-pill ' + (RECEIPT_TONES[r.status] || 'muted') + '">' + escapeHtml(r.status_label) + '</span></span>' +
                         '<span class="op-receipt-desc"><b>' + escapeHtml(r.address || '—') + '</b><span>' + escapeHtml(r.client) + '</span></span>' +

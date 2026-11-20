@@ -89,7 +89,14 @@ return [
                 ['daily',],
                 env('APP_ENV') === 'production' ? ['telegram']: []
             ),
-            'ignore_exceptions' => false,
+            // A channel that fails must not fail the request. Telegram refuses
+            // messages when the bot sends too many ("Too Many Requests: retry after
+            // 14"); with this false that exception escaped every Log::error call, so
+            // any request that logged an error crashed — admin pages, orders, the
+            // Poster webhook — and the crash was logged again, keeping the bot
+            // rate-limited. With true the failing channel is skipped and the others
+            // (daily) still write, whatever their order.
+            'ignore_exceptions' => true,
         ],
 
         'single' => [
